@@ -15,11 +15,12 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
   - Richtungspfeil: zeigt die Richtung zum Ziel relativ zum GPS-Kurs über Grund (Pfeil nach oben = geradeaus). Darunter steht, um wie viel Grad nach links (L) oder rechts (R) gedreht werden muss. Ohne Bewegung (unter 15 km/h) ist der Pfeil grau und nach Norden ausgerichtet, darunter steht der Kurs zum Ziel (z. B. 095°).
   - Wind, Polare, MacCready und Sinken werden nicht berücksichtigt. Die Rechnung ist rein geometrisch.
   - Die eigene Höhe ist die kalibrierte GPS-Höhe. Vor dem Flug unbedingt kalibrieren.
+- Kartenseite (🗺 oben, zurück mit ◎): Karte mit Flugzeugsymbol in Flugrichtung, Kurslinie (15 km voraus) und gestrichelter Linie zum Ziel. Wendepunkte aus der Datei sind eingezeichnet (grün = Landeplatz), Namen ab Zoomstufe 10. Ein Tippen auf einen Wendepunkt zeigt Name und Höhe sowie „Als Ziel wählen“. Die Karte folgt dem Flugzeug, nach dem Verschieben bringt ⌖ sie zurück. Die Endanflug-Box bleibt oben, Fahrt, Vario und Höhe stehen digital darunter (im Querformat daneben). Kartenstil OpenStreetMap oder OpenTopoMap (Gelände), umschaltbar in ⚙. Angesehene Kartenkacheln werden gespeichert, bis zu 2000 Stück.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.
 - Höhenkorrektur: Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen. Viele Handys liefern die Höhe über dem Ellipsoid, das sind in Österreich etwa 45–50 m mehr als über Meer.
 - Der Bildschirm bleibt an.
 - Läuft nach dem ersten Laden auch ohne Internet.
-- Tagmodus für Sonnenlicht und eine Vollbild-Taste.
+- Tagmodus für Sonnenlicht. Vollbild lässt sich in ⚙ umschalten.
 - Simulation zum Testen am Boden (in den Einstellungen).
 - Fehlen GPS-Daten länger als 5 Sekunden, werden die Zeiger ausgeblendet und die Zahlen rot.
 
@@ -48,6 +49,8 @@ js/climb.js                 Steigen/Sinken aus der GPS-Höhe
 js/audio.js                 Vario-Ton
 js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
+js/map.js                   Kartenseite (Leaflet)
+vendor/leaflet/             Leaflet 1.9.4 (BSD-2-Clause), lokal für Offline-Betrieb
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
 js/instruments/airspeed.js  Fahrtmesser
@@ -66,3 +69,5 @@ So kommt ein neues Instrument dazu:
 ## Lizenzen
 
 Die Schrift ist B612 von Airbus, lizenziert unter der SIL Open Font License 1.1.
+
+Die Kartenbibliothek ist Leaflet (BSD-2-Clause, siehe `vendor/leaflet/LICENSE`). Kartendaten: © OpenStreetMap-Mitwirkende (ODbL), OpenTopoMap (CC-BY-SA).

@@ -7,9 +7,10 @@ import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
 import { readWaypointFile, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
 import { startGps, startSimulation } from "./sources.js";
+import { createMapView } from "./map.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null };
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, page: "inst", mapSource: "osm" };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -35,11 +36,60 @@ const fg = createFinalGlide({
   box: document.getElementById("fg"),
   picker: document.getElementById("picker"),
   getSettings: () => ({ safetyHeight: settings.safetyHeight, safeGlide: settings.safeGlide, bestGlide: AIRCRAFT.bestGlide }),
-  onSelect: (t) => { settings.target = t; saveSettings(); },
+  onSelect: (t) => { settings.target = t; saveSettings(); mapView?.setTarget(t); },
 });
-{
-  const stored = loadWaypoints();
-  if (stored) fg.setPoints(stored.points, settings.target);
+let waypoints = loadWaypoints()?.points || [];
+fg.setPoints(waypoints, settings.target);
+
+// ---------- Kartenseite ----------
+let mapView = null; // wird beim ersten Anzeigen der Karte erzeugt
+let lastPos = null;
+const instPage = document.querySelector(".gauges");
+const mapPage = document.getElementById("mapview");
+const pageBtn = document.getElementById("page");
+const digi = {
+  spd: document.getElementById("d-spd"),
+  var: document.getElementById("d-var"),
+  avg: document.getElementById("d-avg"),
+  alt: document.getElementById("d-alt"),
+};
+function ensureMap() {
+  if (mapView) return mapView;
+  if (!window.L) { showToast("Die Karte konnte nicht geladen werden."); return null; }
+  mapView = createMapView({
+    container: document.getElementById("map"),
+    recenterBtn: document.getElementById("recenter"),
+    onPickTarget: (p) => fg.selectPoint(p),
+    getSource: () => settings.mapSource,
+  });
+  mapView.setPoints(waypoints);
+  mapView.setTarget(settings.target);
+  if (lastPos) mapView.update(lastPos);
+  return mapView;
+}
+function showPage(page) {
+  settings.page = page;
+  saveSettings();
+  const isMap = page === "map";
+  instPage.hidden = isMap;
+  mapPage.hidden = !isMap;
+  pageBtn.textContent = isMap ? "◎" : "🗺";
+  pageBtn.title = isMap ? "Instrumente" : "Karte";
+  pageBtn.setAttribute("aria-label", pageBtn.title);
+  if (isMap && ensureMap()) requestAnimationFrame(() => mapView.shown());
+}
+pageBtn.addEventListener("click", () => showPage(settings.page === "map" ? "inst" : "map"));
+
+const fmtVar = (v) => (v > 0.05 ? "+" : v < -0.05 ? "−" : "") + Math.abs(v).toFixed(1);
+const fmtAlt = (a) => Math.round(a).toLocaleString("de-AT").replace(/[.,\u202f\u00a0]/g, " ");
+function updateDigital() {
+  const by = (id) => instruments.find((i) => i.el === id).shown;
+  const spd = by("asi"), v = by("vario"), alt = by("alt");
+  digi.spd.textContent = spd == null ? "---" : Math.round(spd);
+  digi.var.textContent = v == null ? "---" : fmtVar(v);
+  digi.alt.textContent = alt == null ? "-----" : fmtAlt(alt);
+  const avg = varioInst.extraVal?.avg;
+  digi.avg.textContent = avg == null ? "Ø ---" : `Ø ${fmtVar(avg)}`;
 }
 
 // ---------- Datenfluss ----------
@@ -63,11 +113,13 @@ function onData(d) {
     i.target = i.value(data);
     if (i.extra) i.extraVal = i.extra(data);
   }
-  fg.update(d.lat == null ? null : {
+  const pos = d.lat == null ? null : {
     lat: d.lat, lon: d.lon, alt: data.altitude,
     // Kurs nur verwenden, wenn wir uns bewegen
     track: d.track != null && (d.speedKmh == null || d.speedKmh > 15) ? d.track : null,
-  });
+  };
+  fg.update(pos);
+  if (pos) { lastPos = pos; mapView?.update(pos); }
   setStatus("ok", settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
 
@@ -105,6 +157,7 @@ function frame() {
     i.inst.update(i.shown, i.extraVal);
   }
   audio.setValue(stale ? null : varioInst.target);
+  if (settings.page === "map") updateDigital();
   requestAnimationFrame(frame);
 }
 
@@ -147,6 +200,12 @@ const soundBtn = document.getElementById("sound");
 const volumeIn = document.getElementById("volume");
 const sinkToneIn = document.getElementById("sink-tone");
 const sinkThrIn = document.getElementById("sink-threshold");
+const mapSrcIn = document.getElementById("map-source");
+mapSrcIn.addEventListener("change", () => {
+  settings.mapSource = mapSrcIn.value;
+  saveSettings();
+  mapView?.setSource(settings.mapSource);
+});
 
 // ---------- Vario-Ton ----------
 function applyAudioSettings() {
@@ -188,8 +247,8 @@ fgBox.addEventListener("click", openPicker);
 fgBox.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); } });
 document.getElementById("wp-none").addEventListener("click", () => {
   settings.target = null; saveSettings();
-  const stored = loadWaypoints();
-  fg.setPoints(stored ? stored.points : [], null);
+  fg.setPoints(waypoints, null);
+  mapView?.setTarget(null);
   document.getElementById("picker").close();
 });
 
@@ -207,7 +266,10 @@ wpFile.addEventListener("change", async () => {
     try { saveWaypoints(file.name, points); }
     catch { showToast("Die Datei ist zu groß zum Speichern. Sie gilt nur bis zum Schließen der App."); }
     settings.target = null; saveSettings();
+    waypoints = points;
     fg.setPoints(points, null);
+    mapView?.setPoints(points);
+    mapView?.setTarget(null);
     wpInfo.textContent = `${points.length} Wendepunkte aus „${file.name}“`;
     showToast(`${points.length} Wendepunkte geladen. Tippe oben auf die Endanflug-Box, um ein Ziel zu wählen.`);
   } catch (e) {
@@ -218,7 +280,10 @@ wpFile.addEventListener("change", async () => {
 document.getElementById("wp-clear").addEventListener("click", () => {
   clearWaypoints();
   settings.target = null; saveSettings();
+  waypoints = [];
   fg.setPoints([], null);
+  mapView?.setPoints([]);
+  mapView?.setTarget(null);
   showWpInfo();
 });
 const safetyIn = document.getElementById("safety-height");
@@ -250,6 +315,7 @@ document.getElementById("open-settings").addEventListener("click", () => {
   volumeIn.value = settings.volume;
   sinkToneIn.checked = settings.sinkTone;
   sinkThrIn.value = String(settings.sinkThreshold);
+  mapSrcIn.value = settings.mapSource;
   gpsAltOut.textContent = last && last.altitude != null ? `${Math.round(last.altitude)} m` : "keine";
   dlg.showModal();
 });
@@ -306,6 +372,7 @@ document.getElementById("fullscreen").addEventListener("click", async () => {
 
 // ---------- Start ----------
 applyDay();
+showPage(settings.page);
 applyAudioSettings();
 updateSoundBtn();
 if (settings.sound) startSound();

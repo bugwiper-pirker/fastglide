@@ -159,6 +159,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
       render();
     },
     update(p) { pos = p; render(); },
+    selectPoint(p) { select(points.indexOf(p)); },
     render,
   };
 }
