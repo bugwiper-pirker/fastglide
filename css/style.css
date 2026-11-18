@@ -168,6 +168,21 @@ input[type="search"] { font: inherit; font-size: 1.05rem; padding: 10px 12px; bo
 .wp-empty { color: var(--muted); padding: 10px; }
 input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
 
+/* Aufgaben-Info */
+.task-dlg { max-height: 90vh; }
+.task-dlg h2:focus { outline: none; }
+.ti-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: .9rem; }
+.ti-facts dt { color: var(--muted); }
+.ti-facts dd { margin: 0; font-family: var(--font-num); }
+.ti-airspace { border: 1px solid var(--yellow); border-radius: 8px; padding: 8px 10px; font-size: .88rem; line-height: 1.4; }
+.ti-airspace b { color: var(--yellow); display: block; }
+.ti-points { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.ti-points th { text-align: left; color: var(--muted); font-weight: 400; font-size: .72rem; padding: 2px 4px; }
+.ti-points td { padding: 4px; border-top: 1px solid var(--bezel); vertical-align: top; }
+.ti-points td:nth-child(1) { font-weight: 700; color: var(--accent); }
+.ti-points td:nth-child(3) { font-family: var(--font-num); text-align: right; white-space: nowrap; }
+.ti-notes { margin: 0; padding: 10px; background: var(--face); border-radius: 8px; font-family: var(--font-ui); font-size: .85rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* Kartenseite */
 .mapview { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .map-wrap { position: relative; flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--bezel); }

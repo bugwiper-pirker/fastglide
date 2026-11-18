@@ -15,7 +15,7 @@
 <body>
   <div class="app">
     <header>
-      <h1 class="brand">Travel<span>Speed</span></h1>
+      <h1 class="brand">Glide<span>Wise</span></h1>
       <span class="chip" id="status" data-state="wait"><i></i><span id="status-text">GPS SUCHT …</span></span>
       <button id="sound" aria-pressed="false" title="Vario-Ton">🔇</button>
       <button id="day" aria-pressed="false" title="Tagmodus">☀</button>
@@ -60,7 +60,7 @@
           <button id="tg-airspace" type="button" aria-pressed="true">Luftraum</button>
           <button id="tg-task" type="button" aria-pressed="true" hidden>Aufgabe</button>
         </div>
-        <button id="task-chip" class="task-chip" type="button" title="Ganze Aufgabe zeigen" hidden></button>
+        <button id="task-chip" class="task-chip" type="button" title="Aufgaben-Info" hidden></button>
       </div>
       <div class="digi">
         <div class="digi-c"><span class="fg-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b> km/h</span></div>
@@ -79,6 +79,19 @@
       <label class="row"><input id="wp-landable" type="checkbox"> Nur Landeplätze</label>
       <ul id="wp-list" class="wp-list"></ul>
       <button id="wp-none" type="button">Kein Ziel</button>
+      <button class="primary">Schließen</button>
+    </form>
+  </dialog>
+
+  <dialog id="task-dlg" class="task-dlg">
+    <form method="dialog" class="settings">
+      <h2 id="ti-title" tabindex="-1" autofocus></h2>
+      <p class="hint" id="ti-sub"></p>
+      <dl id="ti-facts" class="ti-facts"></dl>
+      <div id="ti-airspace" class="ti-airspace" hidden></div>
+      <table class="ti-points"><thead><tr><th></th><th>Punkt</th><th>km</th><th>Zone</th></tr></thead><tbody id="ti-points"></tbody></table>
+      <pre id="ti-notes" class="ti-notes" hidden></pre>
+      <button id="ti-map" type="button">Ganze Aufgabe auf der Karte</button>
       <button class="primary">Schließen</button>
     </form>
   </dialog>
@@ -132,6 +145,7 @@
         </label>
         <button type="button" id="task-url-load">Von Link laden</button>
         <p class="hint"><b id="task-info">Keine Aufgabe geladen</b></p>
+        <button type="button" id="task-show-info" hidden>Aufgaben-Info anzeigen</button>
         <button type="button" id="task-clear">Aufgabe löschen</button>
       </fieldset>
 

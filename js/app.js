@@ -5,8 +5,8 @@ import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
-import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup } from "./waypoints.js";
-import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl } from "./task.js";
+import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup, distanceKm } from "./waypoints.js";
+import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl, zoneText } from "./task.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
@@ -611,6 +611,7 @@ function updateLayerUi() {
   taskChip.hidden = !task || !settings.showTask;
   if (task) taskChip.textContent = taskSummary(task);
   taskInfo.textContent = task ? taskSummary(task) : "Keine Aufgabe geladen";
+  document.getElementById("task-show-info").hidden = !task;
   showAirspaceIn.checked = settings.showAirspace;
   showTaskIn.checked = settings.showTask;
 }
@@ -624,7 +625,57 @@ tgAirspace.addEventListener("click", () => setLayer("airspace", !settings.showAi
 tgTask.addEventListener("click", () => setLayer("task", !settings.showTask));
 showAirspaceIn.addEventListener("change", () => setLayer("airspace", showAirspaceIn.checked));
 showTaskIn.addEventListener("change", () => setLayer("task", showTaskIn.checked));
-taskChip.addEventListener("click", () => mapView?.fitTask());
+
+// Aufgaben-Info: alles, was zur Aufgabe bekannt ist (Punkte, Zonen, Notizen, inaktive Lufträume …)
+const taskDlg = document.getElementById("task-dlg");
+function showTaskInfo() {
+  if (!task) return;
+  const info = task.info || {};
+  const $ = (id) => document.getElementById(id);
+  const add = (tag, parent, text) => { const e = document.createElement(tag); e.textContent = text; parent.appendChild(e); return e; };
+  $("ti-title").textContent = info.day || task.name;
+  $("ti-sub").textContent = [info.contest, info.day ? task.name : ""].filter(Boolean).join(" · ");
+  $("ti-sub").hidden = !$("ti-sub").textContent;
+
+  const facts = $("ti-facts");
+  facts.replaceChildren();
+  const km = task.distanceKm.toLocaleString("de-AT", { maximumFractionDigits: 1 });
+  for (const [k, v] of [["Strecke", `${km} km, ${task.points.length - 2} Wenden`], ...(info.facts || [])]) {
+    add("dt", facts, k);
+    add("dd", facts, v);
+  }
+
+  const as = $("ti-airspace");
+  as.replaceChildren();
+  as.hidden = !info.inactiveAirspaces?.length;
+  if (!as.hidden) {
+    add("b", as, "Inaktive Lufträume");
+    add("span", as, info.inactiveAirspaces.join(", "));
+  }
+
+  const rows = $("ti-points");
+  rows.replaceChildren();
+  task.points.forEach((p, i, pts) => {
+    const tr = document.createElement("tr");
+    add("td", tr, i === 0 ? "S" : i === pts.length - 1 ? "Z" : String(i));
+    add("td", tr, p.name);
+    add("td", tr, i === 0 ? "" : distanceKm(pts[i - 1].lat, pts[i - 1].lon, p.lat, p.lon).toFixed(1));
+    add("td", tr, zoneText(p.oz, i, pts.length));
+    rows.appendChild(tr);
+  });
+
+  $("ti-notes").textContent = info.notes || "";
+  $("ti-notes").hidden = !info.notes;
+  taskDlg.showModal();
+}
+taskChip.addEventListener("click", showTaskInfo);
+document.getElementById("task-show-info").addEventListener("click", showTaskInfo);
+document.getElementById("ti-map").addEventListener("click", () => {
+  taskDlg.close();
+  if (dlg.open) dlg.close();
+  showPage("map");
+  mapView?.fitTask();
+});
 
 function useTask(fileName, t) {
   task = t;

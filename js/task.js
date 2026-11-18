@@ -101,10 +101,15 @@ export function parseCupTask(text, extraWaypoints = []) {
   if (pts.length < 2) throw new Error("Die Aufgabe hat zu wenige Punkte.");
 
   const tt = t.options.TaskTime || t.options.tasktime;
+  const ns = t.options.NoStart || t.options.nostart;
+  const facts = [];
+  if (tt && tt !== "00:00:00") facts.push(["Mindestzeit", `${tt.slice(0, 5)} h`]);
+  if (ns) facts.push(["Abflug frühestens", ns.slice(0, 5)]);
   return finishTask({
     name: t.name,
     aat: !!tt && tt !== "00:00:00",
     taskTime: tt || null,
+    info: { facts },
     points: pts.map((w, i) => ({
       name: w.name, code: w.code || "", lat: w.lat, lon: w.lon, elev: w.elev ?? null,
       oz: t.zones[i] || defaultOz(i, pts.length),
@@ -201,7 +206,56 @@ export function parseSoaringSpotTask(html) {
     aat: dur > 0,
     taskTime: dur > 0 ? hh(dur) : null,
     points: pts,
+    info: soaringSpotInfo(html, data),
   });
+}
+
+// Text aus einem HTML-Stück: Zeilenumbrüche aus <br>, Tags weg, Entities auflösen
+function htmlText(s) {
+  const ent = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  return (s || "")
+    .replace(/\s+/g, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x?[0-9a-f]+|\w+);/gi, (m, e) =>
+      e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ent[e.toLowerCase()] ?? m);
+}
+
+// Zusatzinfos der Seite: Bewerb, Tag, Aufgabennotizen (Frequenzen, Telefon …), inaktive Lufträume usw.
+function soaringSpotInfo(html, data) {
+  const one = (re) => { const m = re.exec(html); return m ? htmlText(m[1]).replace(/\s+/g, " ").trim() : ""; };
+  const facts = [];
+  const typ = { polygon: "Racing Task", assigned_area: "AAT (Area Assigned Task)" }[data.task_type] || data.task_type;
+  if (typ) facts.push(["Aufgabentyp", typ]);
+  if (Number(data.task_duration) > 0) {
+    const d = Number(data.task_duration);
+    facts.push(["Mindestzeit", `${Math.floor(d / 3600)}:${String(Math.floor((d % 3600) / 60)).padStart(2, "0")} h`]);
+  }
+  if (data.no_start) facts.push(["Abflug frühestens", String(data.no_start).slice(11, 16)]);
+  if (data.qnh) facts.push(["QNH", `${data.qnh} hPa`]);
+  if (data.result_status) facts.push(["Ergebnis", { official: "offiziell", preliminary: "vorläufig", unofficial: "inoffiziell" }[data.result_status] || data.result_status]);
+
+  let inactiveAirspaces = [];
+  for (const m of html.matchAll(/<div class="task-info ([^"]*)">([\s\S]*?)<\/div>/g)) {
+    const t = htmlText(m[2]).replace(/\s+/g, " ").trim();
+    const i = t.indexOf(":");
+    if (i < 0) continue;
+    const k = t.slice(0, i).trim(), v = t.slice(i + 1).trim();
+    if (/excluded-airspaces/.test(m[1])) inactiveAirspaces = v.split(/\s*,\s*/).filter(Boolean);
+    else if (v) facts.push([k, v]);
+  }
+
+  // Aufgabennotizen: der Absatz nach der Überschrift unter der Punkttabelle
+  const nm = /<\/table>[\s\S]*?<h3>[^<]*<\/h3>\s*<p>([\s\S]*?)<\/p>/.exec(html);
+  const notes = nm
+    ? htmlText(nm[1]).split("\n").map((l) => l.trim().replace(/^([=*_#~-])\1{9,}$/, "$1".repeat(10))).join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n")
+    : "";
+
+  return {
+    contest: one(/<div class="contest-title">[\s\S]*?<h1>([\s\S]*?)<\/h1>/),
+    day: one(/<h2 class="pull-left">([\s\S]*?)<\/h2>/),
+    facts, notes, inactiveAirspaces,
+  };
 }
 
 // Ergebnisseite → Aufgabenseite: /<sprache>/<bewerb>/results/<klasse>/<tag>/… → …/tasks/<klasse>/<tag>
