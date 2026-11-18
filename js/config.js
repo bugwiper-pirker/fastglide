@@ -16,3 +16,7 @@ export const AIRCRAFT = {
 export const ALTIMETER = {
   max: 10000, // m
 };
+
+export const VARIO = {
+  max: 5, // m/s, Skala von -max bis +max
+};

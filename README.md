@@ -1,12 +1,13 @@
 # TravelSpeed
 
-PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt und Höhe analog und digital an. Die Werte kommen vom GPS des Handys.
+PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog und digital an. Die Werte kommen vom GPS des Handys.
 
 **Wichtig:** Die Fahrt ist die GPS-Geschwindigkeit über Grund (GS), nicht die angezeigte Fahrt (IAS). Bei Gegenwind ist sie kleiner, bei Rückenwind größer als am Fahrtmesser. TravelSpeed ersetzt keine zugelassenen Instrumente.
 
 ## Funktionen
 
 - Fahrtmesser 0–285 km/h mit den Markierungen des Arcus M (Flughandbuch 2.3): weißer Bogen 88–180, grüner Bogen 96–180, gelber Bogen 180–280, roter Strich 280, blauer Strich 95 (VY), gelbes Dreieck 105.
+- Variometer −5 bis +5 m/s. Null liegt links, Steigen geht nach oben (grün), Sinken nach unten (rot). Darunter steht der Mittelwert der letzten 20 s. Das Steigen wird per linearer Regression aus der GPS-Höhe berechnet. Die Dämpfung lässt sich in den Einstellungen auf 2, 4, 6 oder 8 s stellen. Weil die GPS-Höhe nur einmal pro Sekunde kommt und rauscht, reagiert das Vario träger als ein echtes, druckbasiertes Variometer.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.
 - Höhenkorrektur: Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen. Viele Handys liefern die Höhe über dem Ellipsoid, das sind in Österreich etwa 45–50 m mehr als über Meer.
 - Der Bildschirm bleibt an.
@@ -36,10 +37,12 @@ index.html                  Bildschirm und Einstellungsdialog
 css/style.css               Farben (Nacht/Tag) und Layout
 js/config.js                Flugzeugdaten (Geschwindigkeiten aus dem Flughandbuch)
 js/sources.js               Datenquellen: GPS und Simulation
+js/climb.js                 Steigen/Sinken aus der GPS-Höhe
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
 js/instruments/airspeed.js  Fahrtmesser
 js/instruments/altimeter.js Höhenmesser
+js/instruments/vario.js     Variometer
 sw.js                       Offline-Cache
 ```
 

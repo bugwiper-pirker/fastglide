@@ -55,8 +55,9 @@ export function startSimulation(onData) {
     const speed = climbing
       ? 95 + 8 * Math.sin(t * 0.6) + Math.random() * 3
       : 165 + 10 * Math.sin(t * 0.2) + Math.random() * 4;
-    alt += climbing ? 1.8 : -1.1;
-    onData({ speedKmh: speed, altitude: alt, accuracy: 5, time: Date.now() });
+    alt += climbing ? 1.8 + 1.2 * Math.sin(t * 0.35) : -1.1;
+    // GPS-Höhe rauscht: ein paar Meter Zufall dazu
+    onData({ speedKmh: speed, altitude: alt + (Math.random() - 0.5) * 3, accuracy: 5, time: Date.now() });
   }, 1000);
   return () => clearInterval(id);
 }

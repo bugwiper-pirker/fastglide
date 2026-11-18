@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#15181c">
-  <meta name="description" content="Fahrt- und Höhenanzeige per GPS für den Segelflug">
+  <meta name="description" content="Fahrt-, Steig- und Höhenanzeige per GPS für den Segelflug">
   <title>TravelSpeed</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -23,6 +23,7 @@
 
     <main class="gauges">
       <section class="inst"><svg id="asi" role="img" aria-label="Fahrtmesser"></svg></section>
+      <section class="inst"><svg id="vario" role="img" aria-label="Variometer"></svg></section>
       <section class="inst"><svg id="alt" role="img" aria-label="Höhenmesser"></svg></section>
     </main>
   </div>
@@ -44,6 +45,19 @@
         <p class="hint">Aktuelle GPS-Höhe (roh): <b id="gps-alt">keine</b></p>
         <label>Korrektur (m)
           <input id="alt-offset" type="number" inputmode="numeric" step="1">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Variometer</legend>
+        <p class="hint">Das Steigen wird aus der GPS-Höhe berechnet. Eine längere Dämpfung zeigt ruhiger an, reagiert aber später.</p>
+        <label>Dämpfung
+          <select id="vario-window">
+            <option value="2">2 s (schnell, unruhig)</option>
+            <option value="4">4 s (Standard)</option>
+            <option value="6">6 s</option>
+            <option value="8">8 s (ruhig, träge)</option>
+          </select>
         </label>
       </fieldset>
 
