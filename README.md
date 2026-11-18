@@ -8,6 +8,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
 
 - Fahrtmesser 0–285 km/h mit den Markierungen des Arcus M (Flughandbuch 2.3): weißer Bogen 88–180, grüner Bogen 96–180, gelber Bogen 180–280, roter Strich 280, blauer Strich 95 (VY), gelbes Dreieck 105.
 - Variometer −5 bis +5 m/s. Null liegt links, Steigen geht nach oben (grün), Sinken nach unten (rot). Darunter steht der Mittelwert der letzten 20 s. Das Steigen wird per linearer Regression aus der GPS-Höhe berechnet. Die Dämpfung lässt sich in den Einstellungen auf 2, 4, 6 oder 8 s stellen. Weil die GPS-Höhe nur einmal pro Sekunde kommt und rauscht, reagiert das Vario träger als ein echtes, druckbasiertes Variometer.
+- Vario-Ton (🔊 oben): Ab +0,2 m/s piept es, je stärker das Steigen, desto höher (650–1550 Hz) und schneller. Optional gibt es einen tiefen Dauerton beim Sinken mit einstellbarer Schwelle. Die Lautstärke ist einstellbar und folgt der Medien-Lautstärke des Handys.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.
 - Höhenkorrektur: Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen. Viele Handys liefern die Höhe über dem Ellipsoid, das sind in Österreich etwa 45–50 m mehr als über Meer.
 - Der Bildschirm bleibt an.
@@ -38,6 +39,7 @@ css/style.css               Farben (Nacht/Tag) und Layout
 js/config.js                Flugzeugdaten (Geschwindigkeiten aus dem Flughandbuch)
 js/sources.js               Datenquellen: GPS und Simulation
 js/climb.js                 Steigen/Sinken aus der GPS-Höhe
+js/audio.js                 Vario-Ton
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
 js/instruments/airspeed.js  Fahrtmesser

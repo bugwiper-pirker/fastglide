@@ -16,6 +16,7 @@
     <header>
       <h1 class="brand">Travel<span>Speed</span></h1>
       <span class="chip" id="status" data-state="wait"><i></i><span id="status-text">GPS SUCHT …</span></span>
+      <button id="sound" aria-pressed="false" title="Vario-Ton">🔇</button>
       <button id="day" aria-pressed="false" title="Tagmodus">☀</button>
       <button id="fullscreen" title="Vollbild">⛶</button>
       <button id="open-settings" title="Einstellungen">⚙</button>
@@ -57,6 +58,24 @@
             <option value="4">4 s (Standard)</option>
             <option value="6">6 s</option>
             <option value="8">8 s (ruhig, träge)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Vario-Ton</legend>
+        <p class="hint">Mit 🔊 oben ein- und ausschalten. Ab +0,2 m/s piept es, je stärker das Steigen, desto höher und schneller.</p>
+        <label>Lautstärke
+          <input id="volume" type="range" min="10" max="100" step="5">
+        </label>
+        <label class="row"><input id="sink-tone" type="checkbox"> Sinkton (tiefer Dauerton)</label>
+        <label>Sinkton ab
+          <select id="sink-threshold">
+            <option value="-1.5">−1,5 m/s</option>
+            <option value="-2">−2,0 m/s</option>
+            <option value="-2.5">−2,5 m/s</option>
+            <option value="-3">−3,0 m/s</option>
+            <option value="-4">−4,0 m/s</option>
           </select>
         </label>
       </fieldset>

@@ -3,10 +3,11 @@ import { createAirspeed } from "./instruments/airspeed.js";
 import { createAltimeter } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
+import { createVarioAudio } from "./audio.js";
 import { startGps, startSimulation } from "./sources.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4 };
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5 };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -24,6 +25,8 @@ const instruments = [
   { el: "alt", create: (svg) => createAltimeter(svg, ALTIMETER), value: (d) => d.altitude },
 ].map((i) => ({ ...i, inst: i.create(document.getElementById(i.el)), shown: null, target: null, extraVal: null }));
 const climb = createClimbCalculator();
+const varioInst = instruments.find((i) => i.el === "vario");
+const audio = createVarioAudio();
 
 // ---------- Datenfluss ----------
 const STALE_MS = 5000;
@@ -79,6 +82,7 @@ function frame() {
     i.shown = i.shown == null ? i.target : i.shown + (i.target - i.shown) * 0.15;
     i.inst.update(i.shown, i.extraVal);
   }
+  audio.setValue(stale ? null : varioInst.target);
   requestAnimationFrame(frame);
 }
 
@@ -117,11 +121,57 @@ const fieldIn = document.getElementById("field-elev");
 const simIn = document.getElementById("sim");
 const varioWinIn = document.getElementById("vario-window");
 const gpsAltOut = document.getElementById("gps-alt");
+const soundBtn = document.getElementById("sound");
+const volumeIn = document.getElementById("volume");
+const sinkToneIn = document.getElementById("sink-tone");
+const sinkThrIn = document.getElementById("sink-threshold");
+
+// ---------- Vario-Ton ----------
+function applyAudioSettings() {
+  audio.setVolume(settings.volume / 100);
+  audio.setSinkTone(settings.sinkTone, settings.sinkThreshold);
+}
+function updateSoundBtn() {
+  const running = audio.isRunning();
+  soundBtn.setAttribute("aria-pressed", settings.sound);
+  soundBtn.textContent = settings.sound ? "🔊" : "🔇";
+  soundBtn.classList.toggle("pending", settings.sound && !running);
+}
+async function startSound() {
+  try {
+    const ok = await audio.enable();
+    if (!ok) showToast("Ton noch nicht aktiv. Bitte einmal auf den Bildschirm tippen.");
+  } catch {
+    showToast("Dieses Gerät kann hier keinen Ton abspielen.");
+  }
+  updateSoundBtn();
+}
+soundBtn.addEventListener("click", async () => {
+  settings.sound = !settings.sound;
+  saveSettings();
+  if (settings.sound) {
+    await startSound();
+    if (audio.isRunning()) showToast("Vario-Ton ein. Lautstärke über die Medien-Lautstärke des Handys.");
+  } else {
+    audio.disable();
+    updateSoundBtn();
+  }
+});
+// Browser erlauben Ton erst nach einer Berührung: beim ersten Tippen nachholen
+document.addEventListener("pointerdown", () => {
+  if (settings.sound && !audio.isRunning()) startSound();
+}, true);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && settings.sound && !audio.isRunning()) startSound();
+});
 
 document.getElementById("open-settings").addEventListener("click", () => {
   offsetIn.value = settings.altOffset;
   simIn.checked = settings.sim;
   varioWinIn.value = String(settings.varioWindow);
+  volumeIn.value = settings.volume;
+  sinkToneIn.checked = settings.sinkTone;
+  sinkThrIn.value = String(settings.sinkThreshold);
   gpsAltOut.textContent = last && last.altitude != null ? `${Math.round(last.altitude)} m` : "keine";
   dlg.showModal();
 });
@@ -144,6 +194,21 @@ varioWinIn.addEventListener("change", () => {
   settings.varioWindow = Number(varioWinIn.value) || 4;
   saveSettings();
 });
+volumeIn.addEventListener("input", () => {
+  settings.volume = Number(volumeIn.value);
+  saveSettings();
+  applyAudioSettings();
+});
+sinkToneIn.addEventListener("change", () => {
+  settings.sinkTone = sinkToneIn.checked;
+  saveSettings();
+  applyAudioSettings();
+});
+sinkThrIn.addEventListener("change", () => {
+  settings.sinkThreshold = Number(sinkThrIn.value);
+  saveSettings();
+  applyAudioSettings();
+});
 simIn.addEventListener("change", () => {
   settings.sim = simIn.checked;
   saveSettings();
@@ -163,6 +228,9 @@ document.getElementById("fullscreen").addEventListener("click", async () => {
 
 // ---------- Start ----------
 applyDay();
+applyAudioSettings();
+updateSoundBtn();
+if (settings.sound) startSound();
 startSource();
 keepAwake();
 requestAnimationFrame(frame);

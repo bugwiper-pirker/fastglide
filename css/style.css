@@ -50,6 +50,10 @@ button {
   border: 1px solid transparent; border-radius: 8px; min-width: 40px; min-height: 40px; padding: 6px 10px; cursor: pointer;
 }
 button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button.pending { border-style: dashed; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { button.pending { animation: none; } }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .gauges { flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 8px; place-items: center; }
@@ -103,3 +107,12 @@ input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent);
 .hint { margin: 0; font-size: .82rem; line-height: 1.45; color: var(--muted); }
 .hint.warn { color: var(--yellow); }
 button.primary { background: var(--accent); color: #111; font-weight: 700; }
+
+/* Schmale Handys: Kopfzeile kompakter, damit alle Knöpfe Platz haben */
+@media (max-width: 480px) {
+  header { gap: 5px; }
+  .brand { font-size: 1rem; }
+  header button { min-width: 38px; padding: 4px 6px; }
+  .chip { min-width: 0; overflow: hidden; padding: 5px 7px; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; }
+}
