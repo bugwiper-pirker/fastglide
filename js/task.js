@@ -8,6 +8,8 @@
 //   ObsZone=1,Style=1,R1=500m,A1=180
 //   Point=1,"WP1","CODE",AT,4806.533N,01656.017E,180.0m,1,...   (optional: Punkt direkt in der Aufgabe)
 // Style: 0 feste Richtung (A12), 1 symmetrisch, 2 zum nächsten, 3 zum vorigen, 4 zum Start.
+//
+// Soaring-Spot-Aufgabenseiten (HTML) werden ebenfalls gelesen, siehe parseSoaringSpotTask.
 
 import { parseCup, splitCsv, parseCupCoord, parseElev, cupTextFromBuffer, distanceKm } from "./waypoints.js";
 
@@ -146,6 +148,69 @@ export function parseXcsoarTask(text) {
   return finishTask({ name: "XCSoar-Aufgabe", aat: type === "AAT", taskTime: minT ? hh(minT) : null, points: pts });
 }
 
+// ---------------- Soaring Spot (Aufgabenseite) ----------------
+// Die Seite enthält die Aufgabe als JSON: Map.SoaringSpot.taskNormalize({...}).
+// Koordinaten und Winkel in Bogenmaß, Radien in m. oz_radius1 ist bei Linien die halbe Länge.
+const SS_STYLE = { fixed: 0, symmetric: 1, next: 2, previous: 3, start: 4 };
+
+function extractJson(text, from) {
+  const start = text.indexOf("{", from);
+  if (start < 0) return null;
+  let depth = 0, inStr = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (c === "\\") i++;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
+export function isSoaringSpotPage(text) { return /taskNormalize\s*\(/.test(text); }
+
+export function parseSoaringSpotTask(html) {
+  const m = /taskNormalize\s*\(/.exec(html);
+  if (!m) return null;
+  const json = extractJson(html, m.index + m[0].length);
+  let data;
+  try { data = JSON.parse(json); } catch { throw new Error("Die Aufgabe auf der Soaring-Spot-Seite konnte nicht gelesen werden."); }
+  const deg = (r) => (Number(r) * 180) / Math.PI;
+  const pts = (data.task_points || [])
+    .slice()
+    .sort((a, b) => a.point_index - b.point_index)
+    .map((p) => ({
+      name: p.name, code: "", lat: deg(p.latitude), lon: deg(p.longitude), elev: p.elevation ?? null,
+      oz: {
+        style: SS_STYLE[p.oz_type] ?? 1,
+        r1: Number(p.oz_radius1) || 500,
+        a1: Math.round(deg(p.oz_angle1 ?? Math.PI) * 10) / 10,
+        r2: Number(p.oz_radius2) || 0,
+        a2: Math.round(deg(p.oz_angle2 || 0) * 10) / 10,
+        a12: p.oz_angle12 != null ? deg(p.oz_angle12) : null,
+        line: !!p.oz_line,
+      },
+    }));
+  if (pts.length < 2) throw new Error("Die Aufgabe hat zu wenige Punkte.");
+  const dur = Number(data.task_duration) || 0;
+  const hh = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:00`;
+  return finishTask({
+    name: data.task_name || `Tag ${data.task_number || ""}`.trim(),
+    aat: dur > 0,
+    taskTime: dur > 0 ? hh(dur) : null,
+    points: pts,
+  });
+}
+
+// Ergebnisseite → Aufgabenseite: /<sprache>/<bewerb>/results/<klasse>/<tag>/… → …/tasks/<klasse>/<tag>
+export function soaringSpotTaskUrl(url) {
+  const u = new URL(url);
+  const m = /^(\/[^/]+\/[^/]+)\/(?:results|tasks)\/([^/]+)\/([^/]+)/.exec(u.pathname);
+  return m ? `${u.origin}${m[1]}/tasks/${m[2]}/${m[3]}` : url;
+}
+
 function finishTask(task) {
   let d = 0;
   for (let i = 1; i < task.points.length; i++) {
@@ -159,6 +224,7 @@ function finishTask(task) {
 // Datei (Puffer) einlesen: .tsk (XML) oder .cup/.cupx
 export async function readTaskBuffer(buf, name, waypoints) {
   const text = await cupTextFromBuffer(buf);
+  if (isSoaringSpotPage(text)) return parseSoaringSpotTask(text);
   const t = /\.tsk$/i.test(name) || text.trimStart().startsWith("<")
     ? parseXcsoarTask(text)
     : parseCupTask(text, waypoints);

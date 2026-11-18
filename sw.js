@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "glidewise-v11";
+const VERSION = "glidewise-v12";
 const FILES = [
   "./",
   "index.html",
@@ -76,9 +76,13 @@ async function receiveShare(req) {
   try {
     const form = await req.formData();
     const file = form.get("file");
-    if (file) {
-      const cache = await caches.open(SHARE_CACHE);
+    const cache = await caches.open(SHARE_CACHE);
+    if (file && file.size) {
       await cache.put("shared-file", new Response(file, { headers: { "X-Name": encodeURIComponent(file.name || "datei") } }));
+    } else {
+      // Geteilter Link (z. B. Soaring-Spot-Aufgabe aus Chrome): steht in "url" oder im Text
+      const link = /https?:\/\/\S+/.exec(`${form.get("url") || ""} ${form.get("text") || ""}`);
+      if (link) await cache.put("shared-url", new Response(link[0]));
     }
   } catch {}
   return Response.redirect("./?share=1", 303);

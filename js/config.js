@@ -27,6 +27,10 @@ export const DEFAULT_AIRSPACE = {
   label: "Austro Control, gültig ab 26.11.2026",
 };
 
+// Proxy für Soaring-Spot-Links (Cloudflare Worker aus proxy/soaringspot-worker.js).
+// Soaring Spot erlaubt keinen direkten Abruf aus dem Browser. Leer = Links von Soaring Spot gehen nicht.
+export const SOARINGSPOT_PROXY = "https://glidewise-soaringspot.gliderpilotmp.workers.dev";
+
 export const ALTIMETER = {
   max: 10000, // m
 };

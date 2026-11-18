@@ -1,4 +1,4 @@
-import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE } from "./config.js";
+import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE, SOARINGSPOT_PROXY } from "./config.js";
 import { createAirspeed } from "./instruments/airspeed.js";
 import { createAltimeter } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
@@ -6,7 +6,7 @@ import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
 import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup } from "./waypoints.js";
-import { readTaskBuffer, saveTask, loadTask, clearTask } from "./task.js";
+import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl } from "./task.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
@@ -641,7 +641,7 @@ function useTask(fileName, t) {
 // Beliebige Datei erkennen: Aufgabe, Wendepunkte oder Lufträume
 async function importAnyFile(buf, name) {
   const text = await cupTextFromBuffer(buf);
-  if (/\.tsk$/i.test(name) || text.trimStart().startsWith("<") || /-+\s*related tasks/i.test(text)) {
+  if (/\.tsk$/i.test(name) || text.trimStart().startsWith("<") || /-+\s*related tasks/i.test(text) || isSoaringSpotPage(text)) {
     useTask(name, await readTaskBuffer(buf, name, waypoints));
     return;
   }
@@ -677,13 +677,25 @@ document.getElementById("task-clear").addEventListener("click", () => {
   updateLayerUi();
 });
 const taskUrl = document.getElementById("task-url");
-document.getElementById("task-url-load").addEventListener("click", async () => {
-  const url = taskUrl.value.trim();
-  if (!/^https?:\/\//i.test(url)) { showToast("Bitte einen vollständigen Link einfügen (https://…)."); return; }
+// Soaring Spot erlaubt keinen direkten Abruf: Aufgabenseite über den eigenen Proxy holen
+async function loadTaskUrl(url) {
+  let host;
+  try { host = /^https?:\/\//i.test(url) && new URL(url).hostname; } catch {}
+  if (!host) { showToast("Bitte einen vollständigen Link einfügen (https://…)."); return; }
+  const soaringSpot = /(^|\.)soaringspot\.com$/i.test(host);
+  if (soaringSpot && !SOARINGSPOT_PROXY) {
+    showToast("Für Soaring-Spot-Links fehlt der Proxy (SOARINGSPOT_PROXY in js/config.js).");
+    return;
+  }
+  const fetchUrl = soaringSpot
+    ? `${SOARINGSPOT_PROXY}?url=${encodeURIComponent(soaringSpotTaskUrl(url))}`
+    : url;
   let res;
-  try { res = await fetch(url, { mode: "cors" }); }
+  try { res = await fetch(fetchUrl, { mode: "cors" }); }
   catch {
-    showToast("Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → GlideWise“ oder „Aufgabendatei laden“ öffnen.");
+    showToast(soaringSpot
+      ? "Soaring Spot ist gerade nicht erreichbar. Ist das Handy online?"
+      : "Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → GlideWise“ oder „Aufgabendatei laden“ öffnen.");
     return;
   }
   if (!res.ok) { showToast(`Der Link liefert einen Fehler (${res.status}).`); return; }
@@ -691,9 +703,10 @@ document.getElementById("task-url-load").addEventListener("click", async () => {
     const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "aufgabe.cup");
     await importAnyFile(await res.arrayBuffer(), name);
   } catch (e) {
-    showToast(e.message || "Unter diesem Link wurde keine Aufgabendatei gefunden. Bitte den Download-Link der Datei verwenden, nicht die Webseite.");
+    showToast(e.message || "Unter diesem Link wurde keine Aufgabe gefunden. Bitte den Link der Aufgabenseite oder der Aufgabendatei verwenden.");
   }
-});
+}
+document.getElementById("task-url-load").addEventListener("click", () => loadTaskUrl(taskUrl.value.trim()));
 
 // „Teilen → GlideWise“: der Service Worker legt die Datei im Cache ab
 async function handleShared() {
@@ -701,6 +714,12 @@ async function handleShared() {
   history.replaceState(null, "", location.pathname);
   try {
     const cache = await caches.open("glidewise-share");
+    const link = await cache.match("shared-url");
+    if (link) {
+      await cache.delete("shared-url");
+      await loadTaskUrl(await link.text());
+      return;
+    }
     const res = await cache.match("shared-file");
     if (!res) { showToast("Keine geteilte Datei gefunden."); return; }
     await cache.delete("shared-file");

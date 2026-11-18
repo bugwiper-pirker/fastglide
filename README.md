@@ -26,7 +26,9 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
   - Grenzen der Prüfung: Verglichen wird mit der GPS-Höhe. FL ist Druckhöhe und kann um 100–300 m abweichen. AGL-Untergrenzen werden ohne Geländedaten ab Meereshöhe gerechnet, AGL-Obergrenzen als unbegrenzt. NOTAMs, MTAs und die Aktivierung von TRAs werden nicht berücksichtigt.
 - Kartenebenen: Auf der Karte schalten „Luftraum“ und „Aufgabe“ (oben rechts) die Ebenen ein und aus, ebenso in ⚙ → Kartenebenen. Ausgeblendete Lufträume werden weiter überwacht.
 - Aufgaben: SeeYou-/LX9000-Aufgaben (.cup mit „Related Tasks“, auch .cupx, so wie Soaring Spot sie liefert) und XCSoar-Aufgaben (.tsk).
-  - Laden über ⚙ → Aufgabe, über einen Download-Link (nur wenn der Server den direkten Abruf erlaubt) oder per **Teilen → GlideWise** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target).
+  - Laden über ⚙ → Aufgabe, über einen Link oder per **Teilen → GlideWise** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target), für Dateien und für Links.
+  - Soaring Spot: Den Link der Aufgabenseite einfügen oder in Chrome teilen, z. B. `https://www.soaringspot.com/de/aac2026/tasks/offene/task-1-on-2026-06-13`. Ein Link auf die Tagesergebnisse geht auch. Die App liest Punkte, Koordinaten, Höhen und Zonen direkt aus der Seite, die Wendepunktliste wird dafür nicht gebraucht. Das braucht den Proxy (siehe unten).
+  - Andere Download-Links gehen nur, wenn der Server den direkten Abruf erlaubt.
   - Beim Teilen erkennt die App den Dateityp selbst: Aufgabe, Wendepunkte (.cup) oder Lufträume (OpenAir .txt).
   - Darstellung: Kurslinie, Start-/Ziellinie, Zylinder und Sektoren (Style 0–4, A1/R1, R2 für Schlüsselloch), nummerierte Punkte (S, 1, 2, …, Z). Tippen auf einen Punkt zeigt Zone und Höhe und bietet „Als Ziel wählen“ für den Endanflug. Der lila Balken unten zeigt Name, Wenden und Strecke, ein Tippen darauf zeigt die ganze Aufgabe.
   - Die Strecke ist von Punktmitte zu Punktmitte gerechnet. Bei AAT ist das die nominelle Strecke, die Mindestzeit steht dabei.
@@ -44,6 +46,15 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
 1. Im Repository auf **Settings → Pages** gehen.
 2. Unter „Build and deployment“ als Quelle **Deploy from a branch** wählen, dann den Branch `main` und den Ordner `/ (root)`.
 3. Nach ein bis zwei Minuten ist die App unter `https://bugwiper-pirker.github.io/glidewise/` erreichbar.
+
+## Aufgaben von Soaring Spot (Proxy einrichten)
+
+Soaring Spot erlaubt Browsern keinen direkten Abruf seiner Seiten (kein CORS). Darum holt ein kleiner Cloudflare Worker die Aufgabenseite. Er lässt nur Adressen von soaringspot.com zu. Der Gratis-Tarif reicht.
+
+1. Auf [dash.cloudflare.com](https://dash.cloudflare.com) ein Konto anlegen und anmelden.
+2. **Workers & Pages → Create → Create Worker** wählen, einen Namen vergeben (z. B. `glidewise-soaringspot`) und **Deploy** klicken.
+3. **Edit code** öffnen, den Inhalt durch `proxy/soaringspot-worker.js` ersetzen und wieder **Deploy** klicken.
+4. Die Adresse des Workers (z. B. `https://glidewise-soaringspot.<konto>.workers.dev`) in `js/config.js` bei `SOARINGSPOT_PROXY` eintragen, in `sw.js` `VERSION` erhöhen, committen und pushen.
 
 ## Am Handy installieren
 
@@ -66,7 +77,7 @@ js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
 js/map.js                   Kartenseite (Leaflet)
 js/airspace.js              Lufträume: OpenAir lesen, Warnlogik
-js/task.js                  Aufgaben: CUP und XCSoar .tsk lesen, Zonen-Geometrie
+js/task.js                  Aufgaben: CUP, XCSoar .tsk und Soaring-Spot-Seiten lesen, Zonen-Geometrie
 vendor/leaflet/             Leaflet 1.9.4 (BSD-2-Clause), lokal für Offline-Betrieb
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
@@ -76,6 +87,7 @@ js/instruments/vario.js     Variometer
 data/2021_LOXN_Alle.cup     Standard-Wendepunktdatei
 data/austria_acg_airspaces_20261126.txt  Luftraumdatei der Austro Control (bei AIRAC-Wechsel ersetzen, js/config.js und sw.js anpassen)
 sw.js                       Offline-Cache
+proxy/soaringspot-worker.js Cloudflare Worker für Soaring-Spot-Links
 ```
 
 So kommt ein neues Instrument dazu:
