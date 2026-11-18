@@ -4,6 +4,7 @@
 // Ohne Wind und ohne Polare: eine reine geometrische Rechnung.
 
 import { distanceKm, LANDABLE } from "./waypoints.js";
+import { bearingDeg } from "./sources.js";
 
 const fmtDist = (km) => (km < 10 ? km.toFixed(1) : Math.round(km).toString());
 
@@ -11,6 +12,32 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
   const $ = (sel) => box.querySelector(sel);
   const nameEl = $(".fg-name"), codeEl = $(".fg-code");
   const distEl = $("#fg-dist"), ldEl = $("#fg-ld"), elevEl = $("#fg-elev"), noteEl = $(".fg-note");
+  const dirEl = $(".fg-dir"), arrowEl = $(".fg-arrow"), turnEl = $(".fg-turn");
+  let arrowAngle = 0; // aktuell gezeichneter Winkel (fortlaufend, ohne Sprung bei 360°)
+
+  // Pfeil drehen, immer auf dem kürzeren Weg
+  function setArrow(deg) {
+    const delta = ((deg - arrowAngle) % 360 + 540) % 360 - 180;
+    arrowAngle += delta;
+    arrowEl.style.transform = `rotate(${arrowAngle}deg)`;
+  }
+
+  function renderDirection(d) {
+    if (!target || !pos || d < 0.3) { dirEl.dataset.mode = "off"; turnEl.textContent = ""; return; }
+    const brg = bearingDeg(pos.lat, pos.lon, target.lat, target.lon);
+    if (pos.track == null) {
+      // Kein Kurs (z. B. am Boden): Pfeil nordausgerichtet, Kurs als Zahl
+      dirEl.dataset.mode = "north";
+      setArrow(brg);
+      turnEl.textContent = `${String(Math.round(brg) % 360).padStart(3, "0")}°`;
+      return;
+    }
+    dirEl.dataset.mode = "rel";
+    const rel = ((brg - pos.track) % 360 + 540) % 360 - 180; // −180..180, + = rechts
+    setArrow(rel);
+    const a = Math.round(Math.abs(rel));
+    turnEl.textContent = a <= 5 ? "gerade" : `${a}° ${rel > 0 ? "R" : "L"}`;
+  }
 
   let points = [];
   let target = null;
@@ -19,6 +46,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
   function render() {
     const s = getSettings();
     box.dataset.state = "none";
+    if (!target || !pos) renderDirection(Infinity);
     if (!points.length) {
       nameEl.textContent = "Endanflug";
       codeEl.textContent = "";
@@ -44,6 +72,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     }
     const d = distanceKm(pos.lat, pos.lon, target.lat, target.lon);
     distEl.textContent = fmtDist(d);
+    renderDirection(d);
 
     if (pos.alt == null || target.elev == null) {
       ldEl.textContent = "--";

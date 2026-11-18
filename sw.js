@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "travelspeed-v4";
+const VERSION = "travelspeed-v5";
 const FILES = [
   "./",
   "index.html",

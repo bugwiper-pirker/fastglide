@@ -12,6 +12,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
 - Endanflug-Box oben: In ⚙ eine Wendepunktdatei im SeeYou-Format laden (`.cup` oder `.cupx`, auch von LX-Geräten). Ein Tippen auf die Box öffnet die Zielauswahl, sortiert nach Entfernung, mit Suche und Filter „Nur Landeplätze“. Angezeigt werden Name und Kürzel des Ziels, die Distanz, die erforderliche Gleitzahl und die Zielhöhe.
   - Erforderliche Gleitzahl = Distanz / (eigene Höhe − Zielhöhe − Sicherheitshöhe). Die Sicherheitshöhe ist einstellbar, Standard 150 m.
   - Farbe: grün bis zur „sicheren Gleitzahl“ (einstellbar, Standard 35), gelb bis zur besten Gleitzahl des Flugzeugs (`js/config.js`, Arcus M: 50), sonst rot. „∞“ heißt unter der Zielhöhe plus Reserve.
+  - Richtungspfeil: zeigt die Richtung zum Ziel relativ zum GPS-Kurs über Grund (Pfeil nach oben = geradeaus). Darunter steht, um wie viel Grad nach links (L) oder rechts (R) gedreht werden muss. Ohne Bewegung (unter 15 km/h) ist der Pfeil grau und nach Norden ausgerichtet, darunter steht der Kurs zum Ziel (z. B. 095°).
   - Wind, Polare, MacCready und Sinken werden nicht berücksichtigt. Die Rechnung ist rein geometrisch.
   - Die eigene Höhe ist die kalibrierte GPS-Höhe. Vor dem Flug unbedingt kalibrieren.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.

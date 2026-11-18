@@ -52,7 +52,7 @@ button {
 button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 button.pending { border-style: dashed; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { button.pending { animation: none; } }
+@media (prefers-reduced-motion: reduce) { button.pending { animation: none; } .fg-arrow { transition: none; } }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -138,12 +138,20 @@ button.primary { background: var(--accent); color: #111; font-weight: 700; }
 .fg[data-state="ok"] .fg-ld b { color: var(--green); }
 .fg[data-state="warn"] .fg-ld b { color: var(--yellow); }
 .fg[data-state="bad"] .fg-ld b { color: var(--red); }
+.fg-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 52px; }
+.fg-dir svg { width: 42px; height: 42px; display: block; }
+.fg-arrow { transform-origin: 20px 20px; transform-box: view-box; transition: transform .6s ease-out; }
+.fg-arrow path { fill: var(--accent); }
+.fg-dir[data-mode="north"] .fg-arrow path { fill: var(--muted); }
+.fg-dir[data-mode="off"] svg { opacity: .15; }
+.fg-turn { font-family: var(--font-num); font-size: .7rem; color: var(--ink); white-space: nowrap; min-height: 1em; }
 .fg-note { font-size: .72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Hochformat: Name in eigener Zeile, Werte darunter verteilt */
 @media (max-width: 640px) {
   .fg { grid-template-columns: minmax(0, 1fr); }
   .fg-vals { grid-row: auto; justify-content: space-between; }
   .fg-v { align-items: flex-start; }
+  .fg-dir { order: -1; }
   .fg-note { order: 3; }
 }
 

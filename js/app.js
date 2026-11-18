@@ -63,7 +63,11 @@ function onData(d) {
     i.target = i.value(data);
     if (i.extra) i.extraVal = i.extra(data);
   }
-  fg.update(d.lat == null ? null : { lat: d.lat, lon: d.lon, alt: data.altitude });
+  fg.update(d.lat == null ? null : {
+    lat: d.lat, lon: d.lon, alt: data.altitude,
+    // Kurs nur verwenden, wenn wir uns bewegen
+    track: d.track != null && (d.speedKmh == null || d.speedKmh > 15) ? d.track : null,
+  });
   setStatus("ok", settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
 
