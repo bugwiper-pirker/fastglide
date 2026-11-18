@@ -1,8 +1,8 @@
-# TravelSpeed
+# GlideWise
 
 PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog und digital an. Die Werte kommen vom GPS des Handys.
 
-**Wichtig:** Die Fahrt ist die GPS-Geschwindigkeit über Grund (GS), nicht die angezeigte Fahrt (IAS). Bei Gegenwind ist sie kleiner, bei Rückenwind größer als am Fahrtmesser. TravelSpeed ersetzt keine zugelassenen Instrumente.
+**Wichtig:** Die Fahrt ist die GPS-Geschwindigkeit über Grund (GS), nicht die angezeigte Fahrt (IAS). Bei Gegenwind ist sie kleiner, bei Rückenwind größer als am Fahrtmesser. GlideWise ersetzt keine zugelassenen Instrumente.
 
 ## Funktionen
 
@@ -26,7 +26,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
   - Grenzen der Prüfung: Verglichen wird mit der GPS-Höhe. FL ist Druckhöhe und kann um 100–300 m abweichen. AGL-Untergrenzen werden ohne Geländedaten ab Meereshöhe gerechnet, AGL-Obergrenzen als unbegrenzt. NOTAMs, MTAs und die Aktivierung von TRAs werden nicht berücksichtigt.
 - Kartenebenen: Auf der Karte schalten „Luftraum“ und „Aufgabe“ (oben rechts) die Ebenen ein und aus, ebenso in ⚙ → Kartenebenen. Ausgeblendete Lufträume werden weiter überwacht.
 - Aufgaben: SeeYou-/LX9000-Aufgaben (.cup mit „Related Tasks“, auch .cupx, so wie Soaring Spot sie liefert) und XCSoar-Aufgaben (.tsk).
-  - Laden über ⚙ → Aufgabe, über einen Download-Link (nur wenn der Server den direkten Abruf erlaubt) oder per **Teilen → TravelSpeed** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target).
+  - Laden über ⚙ → Aufgabe, über einen Download-Link (nur wenn der Server den direkten Abruf erlaubt) oder per **Teilen → GlideWise** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target).
   - Beim Teilen erkennt die App den Dateityp selbst: Aufgabe, Wendepunkte (.cup) oder Lufträume (OpenAir .txt).
   - Darstellung: Kurslinie, Start-/Ziellinie, Zylinder und Sektoren (Style 0–4, A1/R1, R2 für Schlüsselloch), nummerierte Punkte (S, 1, 2, …, Z). Tippen auf einen Punkt zeigt Zone und Höhe und bietet „Als Ziel wählen“ für den Endanflug. Der lila Balken unten zeigt Name, Wenden und Strecke, ein Tippen darauf zeigt die ganze Aufgabe.
   - Die Strecke ist von Punktmitte zu Punktmitte gerechnet. Bei AAT ist das die nominelle Strecke, die Mindestzeit steht dabei.
@@ -43,7 +43,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
 
 1. Im Repository auf **Settings → Pages** gehen.
 2. Unter „Build and deployment“ als Quelle **Deploy from a branch** wählen, dann den Branch `main` und den Ordner `/ (root)`.
-3. Nach ein bis zwei Minuten ist die App unter `https://bugwiper-pirker.github.io/travelspeed/` erreichbar.
+3. Nach ein bis zwei Minuten ist die App unter `https://bugwiper-pirker.github.io/glidewise/` erreichbar.
 
 ## Am Handy installieren
 
