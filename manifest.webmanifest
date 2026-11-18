@@ -1,6 +1,6 @@
 {
-  "name": "TravelSpeed",
-  "short_name": "TravelSpeed",
+  "name": "GlideWise",
+  "short_name": "GlideWise",
   "description": "Fahrt- und Höhenanzeige per GPS für den Segelflug",
   "lang": "de",
   "start_url": "./",

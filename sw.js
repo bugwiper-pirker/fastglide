@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "travelspeed-v10";
+const VERSION = "glidewise-v11";
 const FILES = [
   "./",
   "index.html",
@@ -47,7 +47,7 @@ self.addEventListener("activate", (e) => {
 
 // Kartenkacheln: beim Ansehen speichern, damit sie später ohne Empfang da sind.
 // Kein Vorab-Download ganzer Gebiete (Nutzungsbedingungen der Kartenserver).
-const TILE_CACHE = "travelspeed-tiles";
+const TILE_CACHE = "glidewise-tiles";
 const TILE_MAX = 2000;
 const isTile = (url) => /(^|\.)tile\.(openstreetmap|opentopomap)\.org$/.test(url.hostname);
 
@@ -70,8 +70,8 @@ async function tileResponse(req) {
   }
 }
 
-// „Teilen → TravelSpeed“: geteilte Datei ablegen und die App öffnen
-const SHARE_CACHE = "travelspeed-share";
+// „Teilen → GlideWise“: geteilte Datei ablegen und die App öffnen
+const SHARE_CACHE = "glidewise-share";
 async function receiveShare(req) {
   try {
     const form = await req.formData();

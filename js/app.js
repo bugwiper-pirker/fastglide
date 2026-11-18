@@ -683,7 +683,7 @@ document.getElementById("task-url-load").addEventListener("click", async () => {
   let res;
   try { res = await fetch(url, { mode: "cors" }); }
   catch {
-    showToast("Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → TravelSpeed“ oder „Aufgabendatei laden“ öffnen.");
+    showToast("Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → GlideWise“ oder „Aufgabendatei laden“ öffnen.");
     return;
   }
   if (!res.ok) { showToast(`Der Link liefert einen Fehler (${res.status}).`); return; }
@@ -695,12 +695,12 @@ document.getElementById("task-url-load").addEventListener("click", async () => {
   }
 });
 
-// „Teilen → TravelSpeed“: der Service Worker legt die Datei im Cache ab
+// „Teilen → GlideWise“: der Service Worker legt die Datei im Cache ab
 async function handleShared() {
   if (!new URLSearchParams(location.search).has("share")) return;
   history.replaceState(null, "", location.pathname);
   try {
-    const cache = await caches.open("travelspeed-share");
+    const cache = await caches.open("glidewise-share");
     const res = await cache.match("shared-file");
     if (!res) { showToast("Keine geteilte Datei gefunden."); return; }
     await cache.delete("shared-file");
