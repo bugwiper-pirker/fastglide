@@ -27,6 +27,8 @@ export function startGps(onData, onError) {
       onData({
         speedKmh: speed == null || Number.isNaN(speed) ? null : speed * 3.6,
         altitude: c.altitude, // m, kann null sein
+        lat: c.latitude,
+        lon: c.longitude,
         accuracy: c.accuracy,
         altitudeAccuracy: c.altitudeAccuracy,
         time: pos.timestamp,
@@ -48,7 +50,8 @@ export function startGps(onData, onError) {
 // ---- Simulation zum Testen am Boden ----
 // Abwechselnd Kreisen in der Thermik (langsam, steigend) und Vorflug (schnell, sinkend).
 export function startSimulation(onData) {
-  let t = 0, alt = 1640;
+  // Startpunkt: etwa 25 km westlich von Wiener Neustadt (LOXN), Flug Richtung Osten
+  let t = 0, alt = 1640, lat = 47.84, lon = 15.88;
   const id = setInterval(() => {
     t += 1;
     const climbing = t % 60 < 35;
@@ -56,8 +59,9 @@ export function startSimulation(onData) {
       ? 95 + 8 * Math.sin(t * 0.6) + Math.random() * 3
       : 165 + 10 * Math.sin(t * 0.2) + Math.random() * 4;
     alt += climbing ? 1.8 + 1.2 * Math.sin(t * 0.35) : -1.1;
+    if (!climbing) lon += speed / 3600 / (111.32 * Math.cos((lat * Math.PI) / 180));
     // GPS-Höhe rauscht: ein paar Meter Zufall dazu
-    onData({ speedKmh: speed, altitude: alt + (Math.random() - 0.5) * 3, accuracy: 5, time: Date.now() });
+    onData({ speedKmh: speed, altitude: alt + (Math.random() - 0.5) * 3, lat, lon, accuracy: 5, time: Date.now() });
   }, 1000);
   return () => clearInterval(id);
 }

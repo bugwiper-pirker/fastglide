@@ -2,6 +2,7 @@
 // Quelle: Arcus M Flughandbuch, Abschnitt 2.2 und 2.3 (Okt. 2011), Werte in km/h IAS.
 export const AIRCRAFT = {
   name: "Arcus M",
+  bestGlide: 50,       // beste Gleitzahl (ca.), für die Farbe der Endanflug-Anzeige
   asi: {
     max: 285,          // Skalenende
     whiteArc: [88, 180],   // Betriebsbereich positive Klappen

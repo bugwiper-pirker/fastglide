@@ -22,6 +22,16 @@
       <button id="open-settings" title="Einstellungen">⚙</button>
     </header>
 
+    <section id="fg" class="fg" data-state="none" role="button" tabindex="0" aria-label="Endanflug: Ziel wählen">
+      <div class="fg-head"><span class="fg-name">Endanflug</span><span class="fg-code"></span></div>
+      <div class="fg-vals">
+        <div class="fg-v"><span class="fg-k">Distanz</span><span class="fg-n"><b id="fg-dist">--</b> km</span></div>
+        <div class="fg-v fg-ld"><span class="fg-k">GZ erf.</span><span class="fg-n"><b id="fg-ld">--</b></span></div>
+        <div class="fg-v"><span class="fg-k">Zielhöhe</span><span class="fg-n"><b id="fg-elev">--</b> m</span></div>
+      </div>
+      <div class="fg-note">Wendepunktdatei in ⚙ laden</div>
+    </section>
+
     <main class="gauges">
       <section class="inst"><svg id="asi" role="img" aria-label="Fahrtmesser"></svg></section>
       <section class="inst"><svg id="vario" role="img" aria-label="Variometer"></svg></section>
@@ -30,6 +40,17 @@
   </div>
 
   <div id="toast" class="toast" role="status" hidden></div>
+
+  <dialog id="picker" class="picker">
+    <form method="dialog" class="settings">
+      <h2 tabindex="-1" autofocus>Ziel wählen</h2>
+      <input id="wp-search" type="search" placeholder="Name oder Kürzel suchen" autocomplete="off">
+      <label class="row"><input id="wp-landable" type="checkbox"> Nur Landeplätze</label>
+      <ul id="wp-list" class="wp-list"></ul>
+      <button id="wp-none" type="button">Kein Ziel</button>
+      <button class="primary">Schließen</button>
+    </form>
+  </dialog>
 
   <dialog id="settings">
     <form method="dialog" class="settings">
@@ -47,6 +68,23 @@
         <label>Korrektur (m)
           <input id="alt-offset" type="number" inputmode="numeric" step="1">
         </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Endanflug</legend>
+        <p class="hint">Wendepunktdatei im SeeYou-Format (.cup oder .cupx) laden. Auch LX-Geräte verwenden dieses Format.</p>
+        <label>Wendepunktdatei
+          <input id="wp-file" type="file" accept=".cup,.cupx,.txt,text/plain,application/zip">
+        </label>
+        <p class="hint"><b id="wp-info">Keine Datei geladen</b></p>
+        <button type="button" id="wp-clear">Wendepunkte löschen</button>
+        <label>Sicherheitshöhe über Ziel (m)
+          <input id="safety-height" type="number" inputmode="numeric" step="10" min="0">
+        </label>
+        <label>Sichere Gleitzahl (darunter grün)
+          <input id="safe-glide" type="number" inputmode="numeric" step="1" min="5">
+        </label>
+        <p class="hint">Gelb bis zur besten Gleitzahl des Flugzeugs, darüber rot. Die Rechnung berücksichtigt weder Wind noch Sinken.</p>
       </fieldset>
 
       <fieldset>

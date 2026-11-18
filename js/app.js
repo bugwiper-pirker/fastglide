@@ -4,10 +4,12 @@ import { createAltimeter } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
+import { createFinalGlide } from "./finalglide.js";
+import { readWaypointFile, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
 import { startGps, startSimulation } from "./sources.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5 };
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -27,6 +29,18 @@ const instruments = [
 const climb = createClimbCalculator();
 const varioInst = instruments.find((i) => i.el === "vario");
 const audio = createVarioAudio();
+
+// ---------- Endanflug ----------
+const fg = createFinalGlide({
+  box: document.getElementById("fg"),
+  picker: document.getElementById("picker"),
+  getSettings: () => ({ safetyHeight: settings.safetyHeight, safeGlide: settings.safeGlide, bestGlide: AIRCRAFT.bestGlide }),
+  onSelect: (t) => { settings.target = t; saveSettings(); },
+});
+{
+  const stored = loadWaypoints();
+  if (stored) fg.setPoints(stored.points, settings.target);
+}
 
 // ---------- Datenfluss ----------
 const STALE_MS = 5000;
@@ -49,6 +63,7 @@ function onData(d) {
     i.target = i.value(data);
     if (i.extra) i.extraVal = i.extra(data);
   }
+  fg.update(d.lat == null ? null : { lat: d.lat, lon: d.lon, alt: data.altitude });
   setStatus("ok", settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
 
@@ -76,7 +91,10 @@ function startSource() {
 function frame() {
   const stale = last && Date.now() - lastTime > STALE_MS;
   document.body.classList.toggle("stale", !last || stale);
-  if (stale) setStatus("err", "GPS VERALTET");
+  if (stale && statusText.textContent !== "GPS VERALTET") {
+    setStatus("err", "GPS VERALTET");
+    fg.update(null);
+  }
   for (const i of instruments) {
     if (i.target == null || stale) { i.shown = null; i.inst.update(null, null); continue; }
     i.shown = i.shown == null ? i.target : i.shown + (i.target - i.shown) * 0.15;
@@ -157,6 +175,59 @@ soundBtn.addEventListener("click", async () => {
     updateSoundBtn();
   }
 });
+// Endanflug-Box: Tippen öffnet die Zielauswahl
+const fgBox = document.getElementById("fg");
+function openPicker() {
+  if (!fg.open()) showToast("Zuerst in ⚙ eine Wendepunktdatei laden.");
+}
+fgBox.addEventListener("click", openPicker);
+fgBox.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); } });
+document.getElementById("wp-none").addEventListener("click", () => {
+  settings.target = null; saveSettings();
+  const stored = loadWaypoints();
+  fg.setPoints(stored ? stored.points : [], null);
+  document.getElementById("picker").close();
+});
+
+const wpFile = document.getElementById("wp-file");
+const wpInfo = document.getElementById("wp-info");
+function showWpInfo() {
+  const stored = loadWaypoints();
+  wpInfo.textContent = stored ? `${stored.points.length} Wendepunkte aus „${stored.fileName}“` : "Keine Datei geladen";
+}
+wpFile.addEventListener("change", async () => {
+  const file = wpFile.files[0];
+  if (!file) return;
+  try {
+    const points = await readWaypointFile(file);
+    try { saveWaypoints(file.name, points); }
+    catch { showToast("Die Datei ist zu groß zum Speichern. Sie gilt nur bis zum Schließen der App."); }
+    settings.target = null; saveSettings();
+    fg.setPoints(points, null);
+    wpInfo.textContent = `${points.length} Wendepunkte aus „${file.name}“`;
+    showToast(`${points.length} Wendepunkte geladen. Tippe oben auf die Endanflug-Box, um ein Ziel zu wählen.`);
+  } catch (e) {
+    showToast(e.message || "Die Datei konnte nicht gelesen werden.");
+  }
+  wpFile.value = "";
+});
+document.getElementById("wp-clear").addEventListener("click", () => {
+  clearWaypoints();
+  settings.target = null; saveSettings();
+  fg.setPoints([], null);
+  showWpInfo();
+});
+const safetyIn = document.getElementById("safety-height");
+const safeGlideIn = document.getElementById("safe-glide");
+safetyIn.addEventListener("change", () => {
+  settings.safetyHeight = Math.max(0, Number(safetyIn.value) || 0);
+  saveSettings(); fg.render();
+});
+safeGlideIn.addEventListener("change", () => {
+  settings.safeGlide = Math.max(5, Number(safeGlideIn.value) || 35);
+  saveSettings(); fg.render();
+});
+
 // Browser erlauben Ton erst nach einer Berührung: beim ersten Tippen nachholen
 document.addEventListener("pointerdown", () => {
   if (settings.sound && !audio.isRunning()) startSound();
@@ -169,6 +240,9 @@ document.getElementById("open-settings").addEventListener("click", () => {
   offsetIn.value = settings.altOffset;
   simIn.checked = settings.sim;
   varioWinIn.value = String(settings.varioWindow);
+  safetyIn.value = settings.safetyHeight;
+  safeGlideIn.value = settings.safeGlide;
+  showWpInfo();
   volumeIn.value = settings.volume;
   sinkToneIn.checked = settings.sinkTone;
   sinkThrIn.value = String(settings.sinkThreshold);
