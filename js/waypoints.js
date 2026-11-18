@@ -118,7 +118,17 @@ function decodeText(bytes) {
 }
 
 export async function readWaypointFile(file) {
-  const buf = await file.arrayBuffer();
+  return readWaypointBuffer(await file.arrayBuffer());
+}
+
+// Mitgelieferte Standard-Wendepunktdatei vom Server (bzw. aus dem Offline-Cache) laden
+export async function fetchDefaultWaypoints(url) {
+  const res = await fetch(url, { cache: "no-cache" });
+  if (!res.ok) throw new Error("Die Standard-Wendepunktdatei konnte nicht geladen werden. Besteht eine Internetverbindung?");
+  return readWaypointBuffer(await res.arrayBuffer());
+}
+
+export async function readWaypointBuffer(buf) {
   const head = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
   const isZip = head[0] === 0x50 && head[1] === 0x4b; // "PK"
   const bytes = isZip ? await extractCupFromZip(buf) : new Uint8Array(buf);

@@ -14,6 +14,12 @@ export const AIRCRAFT = {
   },
 };
 
+// Mitgelieferte Wendepunktdatei. Wird geladen, wenn am Handy noch keine Datei gespeichert ist.
+export const DEFAULT_WAYPOINTS = {
+  url: "data/2021_LOXN_Alle.cup",
+  name: "2021_LOXN_Alle.cup",
+};
+
 export const ALTIMETER = {
   max: 10000, // m
 };

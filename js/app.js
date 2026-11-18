@@ -1,16 +1,16 @@
-import { AIRCRAFT, ALTIMETER, VARIO } from "./config.js";
+import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS } from "./config.js";
 import { createAirspeed } from "./instruments/airspeed.js";
 import { createAltimeter } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
-import { readWaypointFile, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
+import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, page: "inst", mapSource: "osm" };
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false, page: "inst", mapSource: "osm" };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -258,28 +258,45 @@ function showWpInfo() {
   const stored = loadWaypoints();
   wpInfo.textContent = stored ? `${stored.points.length} Wendepunkte aus „${stored.fileName}“` : "Keine Datei geladen";
 }
+function useWaypoints(fileName, points, keepTarget) {
+  try { saveWaypoints(fileName, points); }
+  catch { showToast("Die Datei ist zu groß zum Speichern. Sie gilt nur bis zum Schließen der App."); }
+  if (!keepTarget) settings.target = null;
+  settings.wpCleared = false;
+  saveSettings();
+  waypoints = points;
+  fg.setPoints(points, settings.target);
+  mapView?.setPoints(points);
+  mapView?.setTarget(settings.target);
+  wpInfo.textContent = `${points.length} Wendepunkte aus „${fileName}“`;
+}
 wpFile.addEventListener("change", async () => {
   const file = wpFile.files[0];
   if (!file) return;
   try {
     const points = await readWaypointFile(file);
-    try { saveWaypoints(file.name, points); }
-    catch { showToast("Die Datei ist zu groß zum Speichern. Sie gilt nur bis zum Schließen der App."); }
-    settings.target = null; saveSettings();
-    waypoints = points;
-    fg.setPoints(points, null);
-    mapView?.setPoints(points);
-    mapView?.setTarget(null);
-    wpInfo.textContent = `${points.length} Wendepunkte aus „${file.name}“`;
+    useWaypoints(file.name, points, false);
     showToast(`${points.length} Wendepunkte geladen. Tippe oben auf die Endanflug-Box, um ein Ziel zu wählen.`);
   } catch (e) {
     showToast(e.message || "Die Datei konnte nicht gelesen werden.");
   }
   wpFile.value = "";
 });
+async function loadDefaultWaypoints(quiet) {
+  try {
+    const points = await fetchDefaultWaypoints(DEFAULT_WAYPOINTS.url);
+    useWaypoints(DEFAULT_WAYPOINTS.name, points, true);
+    if (!quiet) showToast(`${points.length} Standard-Wendepunkte geladen.`);
+  } catch (e) {
+    if (!quiet) showToast(e.message || "Die Standard-Wendepunktdatei konnte nicht geladen werden.");
+  }
+}
+document.getElementById("wp-default").addEventListener("click", () => loadDefaultWaypoints(false));
 document.getElementById("wp-clear").addEventListener("click", () => {
   clearWaypoints();
-  settings.target = null; saveSettings();
+  settings.target = null;
+  settings.wpCleared = true; // nach bewusstem Löschen nicht automatisch neu laden
+  saveSettings();
   waypoints = [];
   fg.setPoints([], null);
   mapView?.setPoints([]);
@@ -378,6 +395,8 @@ updateSoundBtn();
 if (settings.sound) startSound();
 startSource();
 keepAwake();
+// Noch keine Wendepunkte am Handy: mitgelieferte Datei automatisch laden
+if (!waypoints.length && !settings.wpCleared) loadDefaultWaypoints(true);
 requestAnimationFrame(frame);
 
 if ("serviceWorker" in navigator) {

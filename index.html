@@ -89,11 +89,13 @@
 
       <fieldset>
         <legend>Endanflug</legend>
-        <p class="hint">Wendepunktdatei im SeeYou-Format (.cup oder .cupx) laden. Auch LX-Geräte verwenden dieses Format.</p>
+        <p class="hint">Die Standarddatei 2021_LOXN_Alle ist in der App enthalten und wird automatisch geladen.
+          Eine eigene Datei im SeeYou-Format (.cup oder .cupx, auch von LX-Geräten) kann sie ersetzen.</p>
         <label>Wendepunktdatei
           <input id="wp-file" type="file" accept=".cup,.cupx,.txt,text/plain,application/zip">
         </label>
         <p class="hint"><b id="wp-info">Keine Datei geladen</b></p>
+        <button type="button" id="wp-default">Standard-Wendepunkte laden (2021_LOXN_Alle)</button>
         <button type="button" id="wp-clear">Wendepunkte löschen</button>
         <label>Sicherheitshöhe über Ziel (m)
           <input id="safety-height" type="number" inputmode="numeric" step="10" min="0">
