@@ -20,6 +20,13 @@ export const DEFAULT_WAYPOINTS = {
   name: "2021_LOXN_Alle.cup",
 };
 
+// Mitgelieferte Luftraumdatei (Austro Control, OpenAir). Bei jedem AIRAC-Wechsel ersetzen.
+export const DEFAULT_AIRSPACE = {
+  url: "data/austria_acg_airspaces_20261126.txt",
+  name: "austria_acg_airspaces_20261126.txt",
+  label: "Austro Control, gültig ab 26.11.2026",
+};
+
 export const ALTIMETER = {
   max: 10000, // m
 };

@@ -23,6 +23,15 @@
       <button id="open-settings" title="Einstellungen">⚙</button>
     </header>
 
+    <div id="aswarn" class="aswarn" role="alert" hidden>
+      <div class="aswarn-t">⚠ <span id="aswarn-title"></span></div>
+      <div class="aswarn-d" id="aswarn-detail"></div>
+      <div class="aswarn-h">
+        <span>Tippen: 5 Minuten ruhig</span>
+        <button type="button" id="aswarn-ignore">Nicht mehr warnen</button>
+      </div>
+    </div>
+
     <section id="fg" class="fg" data-state="none" role="button" tabindex="0" aria-label="Endanflug: Ziel wählen">
       <div class="fg-head"><span class="fg-name">Endanflug</span><span class="fg-code"></span></div>
       <div class="fg-vals">
@@ -104,6 +113,43 @@
           <input id="safe-glide" type="number" inputmode="numeric" step="1" min="5">
         </label>
         <p class="hint">Gelb bis zur besten Gleitzahl des Flugzeugs, darüber rot. Die Rechnung berücksichtigt weder Wind noch Sinken.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Lufträume</legend>
+        <p class="hint">Die Luftraumdatei der Austro Control (gültig ab 26.11.2026) ist in der App enthalten und wird automatisch geladen.
+          Eine eigene Datei im OpenAir-Format (.txt) kann sie ersetzen. SeeYou-CUB-Dateien (Binärformat) werden nicht unterstützt.</p>
+        <label>Luftraumdatei
+          <input id="as-file" type="file" accept=".txt,.air,.openair,text/plain">
+        </label>
+        <p class="hint"><b id="as-info">Keine Luftraumdatei geladen</b></p>
+        <button type="button" id="as-default">Standard-Lufträume laden (Austro Control)</button>
+        <button type="button" id="as-clear">Lufträume löschen</button>
+        <p class="hint">Warnen bei Annäherung an:</p>
+        <div id="as-cats" class="as-cats"></div>
+        <label>Warnabstand seitlich
+          <select id="as-km">
+            <option value="1">1 km</option>
+            <option value="2">2 km</option>
+            <option value="3">3 km</option>
+            <option value="5">5 km</option>
+          </select>
+        </label>
+        <label>Warnabstand Höhe
+          <select id="as-vmargin">
+            <option value="100">100 m</option>
+            <option value="150">150 m</option>
+            <option value="200">200 m</option>
+            <option value="300">300 m</option>
+          </select>
+        </label>
+        <label class="row"><input id="as-tra" type="checkbox"> TRAs als aktiv behandeln (in einer TRA keine C/D-Warnung)</label>
+        <p class="hint" id="as-ign-info">Keine Ausnahmen.</p>
+        <button type="button" id="as-ign-reset">Ausnahmen zurücksetzen</button>
+        <label class="row"><input id="as-sound" type="checkbox"> Warnton</label>
+        <button type="button" id="as-test">Warnton testen</button>
+        <p class="hint warn">Höhenvergleich mit GPS-Höhe. Flugflächen (FL) beziehen sich auf den Luftdruck und können je nach Wetter um 100–300 m abweichen.
+          Aktivierte Segelflugsektoren und NOTAMs sind nicht berücksichtigt.</p>
       </fieldset>
 
       <fieldset>

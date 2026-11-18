@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "travelspeed-v7";
+const VERSION = "travelspeed-v9";
 const FILES = [
   "./",
   "index.html",
@@ -18,7 +18,9 @@ const FILES = [
   "js/waypoints.js",
   "js/finalglide.js",
   "js/map.js",
+  "js/airspace.js",
   "data/2021_LOXN_Alle.cup",
+  "data/austria_acg_airspaces_20261126.txt",
   "vendor/leaflet/leaflet.js",
   "vendor/leaflet/leaflet.css",
   "fonts/B612-Regular.woff2",

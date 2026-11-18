@@ -75,13 +75,40 @@ export function createVarioAudio() {
       return ctx.state === "running";
     },
     disable() {
+      // Nur den Vario-Ton stoppen; der Audio-Kontext bleibt für Luftraumwarnungen aktiv
       if (timer) { clearInterval(timer); timer = null; }
       if (ctx) {
         gain.gain.cancelScheduledValues(ctx.currentTime);
         gain.gain.setValueAtTime(0, ctx.currentTime);
-        ctx.suspend();
       }
       mode = "silent";
+    },
+    // Audio freischalten (nach Berührung), ohne Vario-Ton zu starten
+    async unlock() {
+      try { ensure(); if (ctx.state !== "running") await ctx.resume(); } catch {}
+      return !!ctx && ctx.state === "running";
+    },
+    // Warnsignal: drei Doppeltöne (inside) bzw. zwei (near), deutlich anders als der Vario-Ton
+    alert(level) {
+      if (!ctx || ctx.state !== "running") return false;
+      const t0 = ctx.currentTime + 0.05;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sawtooth";
+      g.gain.value = 0;
+      o.connect(g).connect(ctx.destination);
+      const n = level === "inside" ? 3 : 2, L = Math.max(0.15, 0.35 * volume);
+      for (let i = 0; i < n; i++) {
+        const t = t0 + i * 0.5;
+        o.frequency.setValueAtTime(980, t);
+        o.frequency.setValueAtTime(700, t + 0.18);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(L, t + 0.01);
+        g.gain.setValueAtTime(L, t + 0.35);
+        g.gain.linearRampToValueAtTime(0, t + 0.37);
+      }
+      o.start(t0);
+      o.stop(t0 + n * 0.5 + 0.1);
+      return true;
     },
     isRunning: () => !!ctx && ctx.state === "running" && !!timer,
     setValue(v) { value = v; },

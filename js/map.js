@@ -2,6 +2,7 @@
 // Verwendet Leaflet (vendor/leaflet) als globales L.
 
 import { LANDABLE } from "./waypoints.js";
+import { CATEGORIES, airspacesAt } from "./airspace.js";
 
 export const MAP_SOURCES = {
   osm: {
@@ -32,7 +33,7 @@ const GLIDER_SVG = `<svg viewBox="0 0 40 40" width="40" height="40" aria-hidden=
   <path d="M20 3 L21.6 13.5 L38 15.2 L38 18 L21.6 18.6 L21.1 30 L26.5 31.4 L26.5 33.4 L20 32.8 L13.5 33.4 L13.5 31.4 L18.9 30 L18.4 18.6 L2 18 L2 15.2 L18.4 13.5 Z"/>
 </svg>`;
 
-export function createMapView({ container, recenterBtn, onPickTarget, getSource }) {
+export function createMapView({ container, recenterBtn, onPickTarget, getSource, isIgnored, toggleIgnore }) {
   const L = window.L;
   const map = L.map(container, {
     zoomControl: true,
@@ -55,6 +56,67 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource 
     tiles.bringToBack();
   }
   setSource(getSource());
+
+  // ---- Lufträume (eigene Ebene unter den Wendepunkten) ----
+  map.createPane("airspace");
+  map.getPane("airspace").style.zIndex = 350;
+  const asRenderer = L.canvas({ pane: "airspace", padding: 0.5 });
+  const asLayer = L.layerGroup().addTo(map);
+  let spaces = [];
+  const polyOf = new Map();
+  const DASHED = new Set(["Q", "TMZ", "RMZ", "W", "E", "F", "G", "OTHER"]);
+
+  function drawAirspaces() {
+    asLayer.clearLayers();
+    polyOf.clear();
+    // große zuerst, damit kleine darüber liegen
+    const sorted = [...spaces].sort((a, b) =>
+      (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]) - (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]));
+    for (const a of sorted) {
+      const c = (CATEGORIES[a.cat] || CATEGORIES.OTHER).color;
+      const poly = L.polygon(a.points, {
+        renderer: asRenderer, pane: "airspace", interactive: false,
+        color: c, weight: 2, opacity: isIgnored(a) ? 0.35 : 0.9, fillColor: c, fillOpacity: 0.06,
+        dashArray: DASHED.has(a.cat) ? "7 5" : null,
+      }).addTo(asLayer);
+      polyOf.set(a, poly);
+    }
+  }
+
+  // Tippen auf die Karte: alle Lufträume an dieser Stelle anzeigen
+  map.on("click", (e) => {
+    const hits = airspacesAt(spaces, e.latlng.lat, e.latlng.lng);
+    if (!hits.length) return;
+    hits.sort((a, b) => a.lower.m - b.lower.m);
+    const div = document.createElement("div");
+    div.className = "as-pop";
+    for (const a of hits) {
+      const cat = CATEGORIES[a.cat] || CATEGORIES.OTHER;
+      const item = document.createElement("div");
+      item.className = "as-item";
+      item.style.setProperty("--c", cat.color);
+      const name = document.createElement("b");
+      name.textContent = a.name || "(ohne Namen)";
+      const alt = document.createElement("div");
+      alt.className = "as-alt";
+      alt.textContent = `von ${a.lower.text} bis ${a.upper.text}`;
+      const meta = document.createElement("div");
+      meta.className = "as-meta";
+      meta.textContent = [cat.label + (a.ac && !/^[A-G]$/.test(a.cat) && /^[A-G]$/i.test(a.ac) ? ` · Klasse ${a.ac}` : ""),
+        a.freq, a.callsign].filter(Boolean).join(" · ");
+      item.append(name, alt, meta);
+      if (!["A", "B", "C", "D", "CTR", "R", "P", "GP", "Q", "TMZ", "RMZ"].includes(a.cat)) { div.appendChild(item); continue; }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "as-ign";
+      const label = () => (btn.textContent = isIgnored(a) ? "Wieder warnen" : "Nicht warnen");
+      label();
+      btn.addEventListener("click", (ev) => { ev.stopPropagation(); toggleIgnore(a); label(); });
+      item.appendChild(btn);
+      div.appendChild(item);
+    }
+    L.popup({ maxWidth: 280, maxHeight: 300, autoPanPadding: [20, 20] }).setLatLng(e.latlng).setContent(div).openOn(map);
+  });
 
   // ---- Wendepunkte ----
   const wpLayer = L.layerGroup().addTo(map);
@@ -88,6 +150,7 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource 
         weight: 1.2,
         fillColor: land ? "#2fbf5b" : "#9aa6b4",
         fillOpacity: 0.95,
+        bubblingMouseEvents: false, // Tippen auf Wendepunkt öffnet nicht die Luftraum-Info
       }).bindPopup(() => popupFor(p)).addTo(wpLayer);
     }
     drawLabels();
@@ -168,6 +231,14 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource 
       else if (follow) map.panTo([pos.lat, pos.lon], { animate: true, duration: 0.5 });
     },
     setPoints(p) { points = p || []; drawPoints(); },
+    setAirspaces(a) { spaces = a || []; drawAirspaces(); },
+    // gewarnte Lufträume hervorheben
+    setWarned(list) {
+      for (const [a, poly] of polyOf) {
+        const w = list.includes(a);
+        poly.setStyle({ weight: w ? 5 : 2, fillOpacity: w ? 0.18 : 0.06, opacity: isIgnored(a) ? 0.35 : 0.9 });
+      }
+    },
     setTarget(t) { target = t; draw(); drawLabels(); },
     setSource,
     // Nach dem Einblenden muss Leaflet die Größe neu messen

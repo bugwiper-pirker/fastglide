@@ -17,6 +17,13 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
   - Wind, Polare, MacCready und Sinken werden nicht berücksichtigt. Die Rechnung ist rein geometrisch.
   - Die eigene Höhe ist die kalibrierte GPS-Höhe. Vor dem Flug unbedingt kalibrieren.
 - Kartenseite (🗺 oben, zurück mit ◎): Karte mit Flugzeugsymbol in Flugrichtung, Kurslinie (15 km voraus) und gestrichelter Linie zum Ziel. Wendepunkte aus der Datei sind eingezeichnet (grün = Landeplatz), Namen ab Zoomstufe 10. Ein Tippen auf einen Wendepunkt zeigt Name und Höhe sowie „Als Ziel wählen“. Die Karte folgt dem Flugzeug, nach dem Verschieben bringt ⌖ sie zurück. Die Endanflug-Box bleibt oben, Fahrt, Vario und Höhe stehen digital darunter (im Querformat daneben). Kartenstil OpenStreetMap oder OpenTopoMap (Gelände), umschaltbar in ⚙. Angesehene Kartenkacheln werden gespeichert, bis zu 2000 Stück.
+- Lufträume: Mitgeliefert ist `data/austria_acg_airspaces_20261126.txt`, die OpenAir-Datei der Austro Control (gültig ab 26.11.2026). Sie wird automatisch geladen, wenn am Handy keine Luftraumdatei gespeichert ist. Eigene OpenAir-Dateien (.txt) lassen sich in ⚙ laden, SeeYou-CUB (Binärformat) wird nicht unterstützt.
+  - Karte: Ränder nach Kategorie gefärbt. CTR rot, C dunkelblau, D blau, R rot, P dunkelrot, Q orange gestrichelt, TMZ violett gestrichelt, RMZ grün gestrichelt, TRA türkis gestrichelt. Tippen auf die Karte zeigt alle Lufträume an dieser Stelle mit Name, Untergrenze, Obergrenze, Kategorie und Frequenz.
+  - Die Austro-Control-Datei führt RMZ und TMZ als Klasse R und TRAs als Klasse W. Die App ordnet sie deshalb nach dem Namen zu (RMZ, TMZ, TRA, CTR, LOR, LOD, LOP).
+  - Warnung (Banner, Ton, Vibration) bei Lufträumen, die für VFR ohne Freigabe nicht erlaubt sind. Standard sind A, B, C, D, CTR, R, P, die Liste ist in ⚙ einstellbar. „Nähert sich“ heißt: seitlich näher als der Warnabstand (Standard 2 km) oder in 60 s laut Kurs drin, und dabei höchstens 150 m über oder unter den Grenzen. „Im Luftraum“ gibt eine rote, pulsierende Warnung und wiederholt den Ton alle 30 s.
+  - Tippen auf die Warnung schaltet sie 5 Minuten stumm. „Nicht mehr warnen“ setzt einen Luftraum dauerhaft auf die Ausnahmeliste, z. B. die MATZ am Heimatplatz. Rückgängig geht das in ⚙ oder im Popup auf der Karte.
+  - Optional „TRAs als aktiv behandeln“: In einer TRA gibt es keine C/D-Warnung.
+  - Grenzen der Prüfung: Verglichen wird mit der GPS-Höhe. FL ist Druckhöhe und kann um 100–300 m abweichen. AGL-Untergrenzen werden ohne Geländedaten ab Meereshöhe gerechnet, AGL-Obergrenzen als unbegrenzt. NOTAMs, MTAs und die Aktivierung von TRAs werden nicht berücksichtigt.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.
 - Höhenkorrektur: Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen. Viele Handys liefern die Höhe über dem Ellipsoid, das sind in Österreich etwa 45–50 m mehr als über Meer.
 - Der Bildschirm bleibt an.
@@ -51,6 +58,7 @@ js/audio.js                 Vario-Ton
 js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
 js/map.js                   Kartenseite (Leaflet)
+js/airspace.js              Lufträume: OpenAir lesen, Warnlogik
 vendor/leaflet/             Leaflet 1.9.4 (BSD-2-Clause), lokal für Offline-Betrieb
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
@@ -58,6 +66,7 @@ js/instruments/airspeed.js  Fahrtmesser
 js/instruments/altimeter.js Höhenmesser
 js/instruments/vario.js     Variometer
 data/2021_LOXN_Alle.cup     Standard-Wendepunktdatei
+data/austria_acg_airspaces_20261126.txt  Luftraumdatei der Austro Control (bei AIRAC-Wechsel ersetzen, js/config.js und sw.js anpassen)
 sw.js                       Offline-Cache
 ```
 
@@ -73,3 +82,5 @@ So kommt ein neues Instrument dazu:
 Die Schrift ist B612 von Airbus, lizenziert unter der SIL Open Font License 1.1.
 
 Die Kartenbibliothek ist Leaflet (BSD-2-Clause, siehe `vendor/leaflet/LICENSE`). Kartendaten: © OpenStreetMap-Mitwirkende (ODbL), OpenTopoMap (CC-BY-SA).
+
+Luftraumdaten: Austro Control, erzeugt aus dem AIP Österreich. Ohne Gewähr, nur zur Ergänzung der Flugvorbereitung, kommerzielle Nutzung nicht gestattet (siehe Kopf der Datei).

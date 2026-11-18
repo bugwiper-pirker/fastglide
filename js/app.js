@@ -1,4 +1,4 @@
-import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS } from "./config.js";
+import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE } from "./config.js";
 import { createAirspeed } from "./instruments/airspeed.js";
 import { createAltimeter } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
@@ -8,9 +8,12 @@ import { createFinalGlide } from "./finalglide.js";
 import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
+import { readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false, page: "inst", mapSource: "osm" };
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false,
+  asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
+  asIgnore: [], asTraActive: false, asCleared: false, page: "inst", mapSource: "osm" };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -39,6 +42,7 @@ const fg = createFinalGlide({
   onSelect: (t) => { settings.target = t; saveSettings(); mapView?.setTarget(t); },
 });
 let waypoints = loadWaypoints()?.points || [];
+let airspaces = loadAirspace()?.spaces || [];
 fg.setPoints(waypoints, settings.target);
 
 // ---------- Kartenseite ----------
@@ -61,7 +65,10 @@ function ensureMap() {
     recenterBtn: document.getElementById("recenter"),
     onPickTarget: (p) => fg.selectPoint(p),
     getSource: () => settings.mapSource,
+    isIgnored: (a) => settings.asIgnore.includes(asKey(a)),
+    toggleIgnore: (a) => setIgnored(a, !settings.asIgnore.includes(asKey(a))),
   });
+  mapView.setAirspaces(airspaces);
   mapView.setPoints(waypoints);
   mapView.setTarget(settings.target);
   if (lastPos) mapView.update(lastPos);
@@ -120,6 +127,7 @@ function onData(d) {
   };
   fg.update(pos);
   if (pos) { lastPos = pos; mapView?.update(pos); }
+  updateAirspaceWarnings(pos ? { ...pos, speedKmh: d.speedKmh } : null);
   setStatus("ok", settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
 
@@ -150,6 +158,7 @@ function frame() {
   if (stale && statusText.textContent !== "GPS VERALTET") {
     setStatus("err", "GPS VERALTET");
     fg.update(null);
+    updateAirspaceWarnings(null);
   }
   for (const i of instruments) {
     if (i.target == null || stale) { i.shown = null; i.inst.update(null, null); continue; }
@@ -160,6 +169,91 @@ function frame() {
   if (settings.page === "map") updateDigital();
   requestAnimationFrame(frame);
 }
+
+// ---------- Luftraumwarnung ----------
+const asBanner = document.getElementById("aswarn");
+const asTitle = document.getElementById("aswarn-title");
+const asDetail = document.getElementById("aswarn-detail");
+const alerted = new Map();   // Luftraum -> { level, time, seen }
+const acked = new Map();     // Luftraum -> bestätigt bis (ms)
+const ACK_MS = 5 * 60 * 1000;
+let currentWarnings = [];
+
+const fmtKm = (km) => (km < 10 ? km.toFixed(1).replace(".", ",") : Math.round(km)) + " km";
+
+function warnOpts() {
+  const cats = new Set(settings.asWarnCats);
+  if (cats.has("C")) { cats.add("A"); cats.add("B"); }
+  if (cats.has("P")) cats.add("GP");
+  return {
+    warnCats: cats, warnKm: settings.asWarnKm, vMargin: settings.asVMargin, lookaheadS: 60,
+    ignore: new Set(settings.asIgnore), traActive: settings.asTraActive,
+  };
+}
+
+function setIgnored(a, on) {
+  const k = asKey(a);
+  const set = new Set(settings.asIgnore);
+  if (on) set.add(k); else set.delete(k);
+  settings.asIgnore = [...set];
+  saveSettings();
+  mapView?.setWarned(currentWarnings.filter((w) => !set.has(asKey(w.space))).map((w) => w.space));
+  showToast(on ? `Keine Warnung mehr für „${a.name}“. Rückgängig in ⚙ oder auf der Karte.` : `Warnung für „${a.name}“ wieder aktiv.`);
+}
+
+function updateAirspaceWarnings(pos) {
+  const now = Date.now();
+  const list = pos && airspaces.length ? checkAirspace(airspaces, pos, warnOpts()) : [];
+  currentWarnings = list;
+  mapView?.setWarned(list.map((w) => w.space));
+
+  // Ton/Vibration: bei neuer Warnung, beim Einflug und alle 30 s solange man drin ist
+  let alarm = null;
+  for (const w of list) {
+    const prev = alerted.get(w.space);
+    const isAcked = (acked.get(w.space) || 0) > now;
+    const fire = !prev || (prev.level === "near" && w.level === "inside") ||
+      (w.level === "inside" && now - prev.time > 30000);
+    if (fire && !isAcked) {
+      alerted.set(w.space, { level: w.level, time: now, seen: now });
+      if (!alarm || w.level === "inside") alarm = w.level;
+    } else if (prev) prev.seen = now;
+  }
+  // Lufträume, die seit 60 s nicht mehr gemeldet wurden, vergessen (verhindert Flackern am Rand)
+  for (const [a, v] of alerted) if (now - v.seen > 60000) alerted.delete(a);
+  if (alarm) {
+    if (settings.asAlertSound) audio.alert(alarm);
+    // Vibration ist erst nach einer Berührung des Bildschirms erlaubt
+    if (navigator.userActivation?.hasBeenActive) {
+      try { navigator.vibrate?.(alarm === "inside" ? [400, 150, 400, 150, 400] : [300, 150, 300]); } catch {}
+    }
+  }
+
+  const visible = list.filter((w) => (acked.get(w.space) || 0) <= now);
+  if (!visible.length) { asBanner.hidden = true; return; }
+  const w = visible[0], a = w.space;
+  const cat = CATEGORIES[a.cat] || CATEGORIES.OTHER;
+  asBanner.hidden = false;
+  asBanner.dataset.level = w.level;
+  if (w.level === "inside") asTitle.textContent = "IM LUFTRAUM";
+  else if (w.dist > 0.05) asTitle.textContent = `LUFTRAUM IN ${fmtKm(w.dist)}` + (w.vgap > 0 ? ` · ${Math.round(w.vgap)} m Abstand` : "");
+  else asTitle.textContent = w.vgap > 0 ? `LUFTRAUM ${Math.round(w.vgap)} m ${(lastPos?.alt ?? 0) < a.lower.m ? "ÜBER" : "UNTER"} DIR` : "LUFTRAUM VORAUS";
+  asDetail.textContent = `${a.name} · ${cat.label} · ${altText(a)}` + (visible.length > 1 ? ` · +${visible.length - 1} weitere` : "");
+}
+document.getElementById("aswarn-ignore").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const now = Date.now();
+  const w = currentWarnings.find((x) => (acked.get(x.space) || 0) <= now);
+  if (w) setIgnored(w.space, true);
+  asBanner.hidden = true;
+  updateAirspaceWarnings(lastPos && now - lastTime < STALE_MS ? { ...lastPos, speedKmh: last?.speedKmh } : null);
+});
+asBanner.addEventListener("click", () => {
+  const until = Date.now() + ACK_MS;
+  for (const w of currentWarnings) acked.set(w.space, until);
+  asBanner.hidden = true;
+  showToast("Warnung für 5 Minuten bestätigt.");
+});
 
 // ---------- Bildschirm anlassen ----------
 let wakeLock = null;
@@ -303,6 +397,101 @@ document.getElementById("wp-clear").addEventListener("click", () => {
   mapView?.setTarget(null);
   showWpInfo();
 });
+// ---------- Luftraum-Einstellungen ----------
+const asFile = document.getElementById("as-file");
+const asInfo = document.getElementById("as-info");
+function showAsInfo() {
+  const stored = loadAirspace();
+  asInfo.textContent = stored ? `${stored.spaces.length} Lufträume aus „${stored.fileName}“` : "Keine Luftraumdatei geladen";
+  asIgnInfo.textContent = settings.asIgnore.length
+    ? `Keine Warnung für: ${settings.asIgnore.map((k) => k.split("|")[0]).join(", ")}`
+    : "Keine Ausnahmen.";
+}
+const asIgnInfo = document.getElementById("as-ign-info");
+document.getElementById("as-ign-reset").addEventListener("click", () => {
+  settings.asIgnore = [];
+  saveSettings();
+  if (mapView) mapView.setAirspaces(airspaces);
+  showAsInfo();
+});
+async function loadDefaultAirspace(quiet) {
+  try {
+    const { text, spaces } = await fetchDefaultAirspace(DEFAULT_AIRSPACE.url);
+    try { saveAirspace(DEFAULT_AIRSPACE.name, text); } catch {}
+    settings.asCleared = false; saveSettings();
+    useAirspaces(spaces);
+    showAsInfo();
+    if (!quiet) showToast(`${spaces.length} Lufträume geladen (${DEFAULT_AIRSPACE.label}).`);
+  } catch (e) {
+    if (!quiet) showToast(e.message || "Die Standard-Luftraumdatei konnte nicht geladen werden.");
+  }
+}
+document.getElementById("as-default").addEventListener("click", () => loadDefaultAirspace(false));
+function useAirspaces(list) {
+  airspaces = list;
+  alerted.clear(); acked.clear();
+  mapView?.setAirspaces(list);
+  updateAirspaceWarnings(lastPos && Date.now() - lastTime < STALE_MS ? { ...lastPos, speedKmh: last?.speedKmh } : null);
+}
+asFile.addEventListener("change", async () => {
+  const file = asFile.files[0];
+  if (!file) return;
+  try {
+    const { text, spaces } = await readAirspaceFile(file);
+    settings.asCleared = false; saveSettings();
+    try { saveAirspace(file.name, text); }
+    catch { showToast("Die Luftraumdatei ist zu groß zum Speichern. Sie gilt nur bis zum Schließen der App."); }
+    useAirspaces(spaces);
+    showAsInfo();
+    if (!loadAirspace()) asInfo.textContent = `${spaces.length} Lufträume aus „${file.name}“ (nicht gespeichert)`;
+    showToast(`${spaces.length} Lufträume geladen.`);
+  } catch (e) {
+    showToast(e.message || "Die Luftraumdatei konnte nicht gelesen werden.");
+  }
+  asFile.value = "";
+});
+document.getElementById("as-clear").addEventListener("click", () => {
+  clearAirspace();
+  settings.asCleared = true; saveSettings();
+  useAirspaces([]);
+  showAsInfo();
+});
+const asKmIn = document.getElementById("as-km");
+const asVIn = document.getElementById("as-vmargin");
+const asSoundIn = document.getElementById("as-sound");
+const asCatsEl = document.getElementById("as-cats");
+const WARN_CHOICES = [
+  ["C", "Klasse C (und A, B)"], ["D", "Klasse D"], ["CTR", "Kontrollzonen (CTR)"],
+  ["R", "Beschränkungsgebiete (R)"], ["P", "Sperrgebiete (P, GP)"], ["Q", "Gefahrengebiete (Q)"],
+  ["TMZ", "TMZ"], ["RMZ", "RMZ"],
+];
+for (const [key, label] of WARN_CHOICES) {
+  const l = document.createElement("label");
+  l.className = "row";
+  const cb = document.createElement("input");
+  cb.type = "checkbox"; cb.value = key; cb.id = `as-cat-${key}`;
+  cb.addEventListener("change", () => {
+    const set = new Set(settings.asWarnCats);
+    if (cb.checked) set.add(key); else set.delete(key);
+    settings.asWarnCats = [...set];
+    saveSettings();
+  });
+  const sw = document.createElement("i");
+  sw.className = "as-swatch";
+  sw.style.setProperty("--c", CATEGORIES[key].color);
+  l.append(cb, sw, document.createTextNode(label));
+  asCatsEl.appendChild(l);
+}
+asKmIn.addEventListener("change", () => { settings.asWarnKm = Number(asKmIn.value) || 2; saveSettings(); });
+asVIn.addEventListener("change", () => { settings.asVMargin = Number(asVIn.value) || 150; saveSettings(); });
+asSoundIn.addEventListener("change", () => { settings.asAlertSound = asSoundIn.checked; saveSettings(); });
+const asTraIn = document.getElementById("as-tra");
+asTraIn.addEventListener("change", () => { settings.asTraActive = asTraIn.checked; saveSettings(); });
+document.getElementById("as-test").addEventListener("click", async () => {
+  await audio.unlock();
+  if (!audio.alert("near")) showToast("Ton nicht verfügbar. Bitte einmal auf den Bildschirm tippen.");
+});
+
 const safetyIn = document.getElementById("safety-height");
 const safeGlideIn = document.getElementById("safe-glide");
 safetyIn.addEventListener("change", () => {
@@ -317,6 +506,7 @@ safeGlideIn.addEventListener("change", () => {
 // Browser erlauben Ton erst nach einer Berührung: beim ersten Tippen nachholen
 document.addEventListener("pointerdown", () => {
   if (settings.sound && !audio.isRunning()) startSound();
+  else audio.unlock(); // für Luftraumwarnungen
 }, true);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && settings.sound && !audio.isRunning()) startSound();
@@ -327,6 +517,12 @@ document.getElementById("open-settings").addEventListener("click", () => {
   simIn.checked = settings.sim;
   varioWinIn.value = String(settings.varioWindow);
   safetyIn.value = settings.safetyHeight;
+  showAsInfo();
+  asKmIn.value = String(settings.asWarnKm);
+  asVIn.value = String(settings.asVMargin);
+  asSoundIn.checked = settings.asAlertSound;
+  asTraIn.checked = settings.asTraActive;
+  for (const cb of asCatsEl.querySelectorAll("input")) cb.checked = settings.asWarnCats.includes(cb.value);
   safeGlideIn.value = settings.safeGlide;
   showWpInfo();
   volumeIn.value = settings.volume;
@@ -397,6 +593,7 @@ startSource();
 keepAwake();
 // Noch keine Wendepunkte am Handy: mitgelieferte Datei automatisch laden
 if (!waypoints.length && !settings.wpCleared) loadDefaultWaypoints(true);
+if (!airspaces.length && !settings.asCleared) loadDefaultAirspace(true);
 requestAnimationFrame(frame);
 
 if ("serviceWorker" in navigator) {
