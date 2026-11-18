@@ -34,7 +34,7 @@ const GLIDER_SVG = `<svg viewBox="0 0 40 40" width="40" height="40" aria-hidden=
   <path d="M20 3 L21.6 13.5 L38 15.2 L38 18 L21.6 18.6 L21.1 30 L26.5 31.4 L26.5 33.4 L20 32.8 L13.5 33.4 L13.5 31.4 L18.9 30 L18.4 18.6 L2 18 L2 15.2 L18.4 13.5 Z"/>
 </svg>`;
 
-export function createMapView({ container, recenterBtn, onPickTarget, getSource, isIgnored, toggleIgnore }) {
+export function createMapView({ container, recenterBtn, onPickTarget, getSource, isIgnored, toggleIgnore, isTaskInactive }) {
   const L = window.L;
   const map = L.map(container, {
     zoomControl: true,
@@ -161,6 +161,14 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
       meta.textContent = [cat.label + (a.ac && !/^[A-G]$/.test(a.cat) && /^[A-G]$/i.test(a.ac) ? ` · Klasse ${a.ac}` : ""),
         a.freq, a.callsign].filter(Boolean).join(" · ");
       item.append(name, alt, meta);
+      if (isTaskInactive?.(a)) {
+        const note = document.createElement("div");
+        note.className = "as-meta";
+        note.textContent = "Laut Aufgabe heute inaktiv, keine Warnung";
+        item.appendChild(note);
+        div.appendChild(item);
+        continue;
+      }
       if (!["A", "B", "C", "D", "CTR", "R", "P", "GP", "Q", "TMZ", "RMZ"].includes(a.cat)) { div.appendChild(item); continue; }
       const btn = document.createElement("button");
       btn.type = "button";

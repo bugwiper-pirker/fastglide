@@ -254,6 +254,7 @@ function soaringSpotInfo(html, data) {
   return {
     contest: one(/<div class="contest-title">[\s\S]*?<h1>([\s\S]*?)<\/h1>/),
     day: one(/<h2 class="pull-left">([\s\S]*?)<\/h2>/),
+    date: data.task_date || null,
     facts, notes, inactiveAirspaces,
   };
 }

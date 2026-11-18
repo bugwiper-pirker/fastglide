@@ -241,6 +241,19 @@ export function clearAirspace() {
 }
 
 // Eindeutiger Schlüssel für die Ausnahmeliste („nicht warnen“)
+// Lufträume aus einer Namensliste finden (z. B. „Inaktive Lufträume“ von Soaring Spot).
+// Passt der ganze Name oder die Kennung vor der Klammer: „LOD28 (MARWIESEN)“ ↔ „LOD28 (MARWIESEN)“ oder „LOD28 …“.
+export function findByNames(spaces, names) {
+  const norm = (s) => (s || "").toUpperCase().replace(/\s+/g, " ").trim();
+  const head = (s) => norm(s).split(/[ (]/)[0];
+  const found = new Map(); // Name aus der Liste → Lufträume
+  for (const n of names) {
+    const full = norm(n), id = head(n);
+    found.set(n, spaces.filter((a) => norm(a.name) === full || (id.length >= 4 && head(a.name) === id)));
+  }
+  return found;
+}
+
 export const asKey = (a) => `${a.name}|${a.lower.text}|${a.upper.text}`;
 
 // ---- Prüfungen ----

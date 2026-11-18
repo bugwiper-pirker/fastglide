@@ -176,6 +176,8 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
 .ti-facts dd { margin: 0; font-family: var(--font-num); }
 .ti-airspace { border: 1px solid var(--yellow); border-radius: 8px; padding: 8px 10px; font-size: .88rem; line-height: 1.4; }
 .ti-airspace b { color: var(--yellow); display: block; }
+.ti-airspace ul { margin: 4px 0; padding-left: 18px; }
+.ti-airspace p { margin: 4px 0 0; color: var(--muted); font-size: .8rem; }
 .ti-points { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .ti-points th { text-align: left; color: var(--muted); font-weight: 400; font-size: .72rem; padding: 2px 4px; }
 .ti-points td { padding: 4px; border-top: 1px solid var(--bezel); vertical-align: top; }

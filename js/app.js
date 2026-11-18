@@ -9,7 +9,7 @@ import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, 
 import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl, zoneText } from "./task.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
-import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
+import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey, findByNames } from "./airspace.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
 const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false,
@@ -71,6 +71,7 @@ function ensureMap() {
     getSource: () => settings.mapSource,
     isIgnored: (a) => settings.asIgnore.includes(asKey(a)),
     toggleIgnore: (a) => setIgnored(a, !settings.asIgnore.includes(asKey(a))),
+    isTaskInactive: (a) => taskInactiveSpaces().keys.has(asKey(a)),
   });
   mapView.setAirspaces(airspaces);
   mapView.setTask(task);
@@ -189,13 +190,28 @@ let currentWarnings = [];
 
 const fmtKm = (km) => (km < 10 ? km.toFixed(1).replace(".", ",") : Math.round(km)) + " km";
 
+// Lufträume, die laut Aufgabe inaktiv sind. Gilt nur am Tag der Aufgabe.
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+let taskInactive = { day: null, matches: new Map(), keys: new Set() };
+function taskInactiveSpaces() {
+  const names = task?.info?.inactiveAirspaces || [];
+  const day = todayIso();
+  if (taskInactive.task !== task || taskInactive.spaces !== airspaces || taskInactive.day !== day) {
+    const active = names.length && (!task.info.date || task.info.date === day);
+    const matches = active ? findByNames(airspaces, names) : new Map();
+    const keys = new Set([...matches.values()].flat().map(asKey));
+    taskInactive = { task, spaces: airspaces, day, matches, keys, active: !!active };
+  }
+  return taskInactive;
+}
+
 function warnOpts() {
   const cats = new Set(settings.asWarnCats);
   if (cats.has("C")) { cats.add("A"); cats.add("B"); }
   if (cats.has("P")) cats.add("GP");
   return {
     warnCats: cats, warnKm: settings.asWarnKm, vMargin: settings.asVMargin, lookaheadS: 60,
-    ignore: new Set(settings.asIgnore), traActive: settings.asTraActive,
+    ignore: new Set([...settings.asIgnore, ...taskInactiveSpaces().keys]), traActive: settings.asTraActive,
   };
 }
 
@@ -205,7 +221,7 @@ function setIgnored(a, on) {
   if (on) set.add(k); else set.delete(k);
   settings.asIgnore = [...set];
   saveSettings();
-  mapView?.setWarned(currentWarnings.filter((w) => !set.has(asKey(w.space))).map((w) => w.space));
+  mapView?.setWarned(currentWarnings.filter((w) => !set.has(asKey(w.space)) && !taskInactiveSpaces().keys.has(asKey(w.space))).map((w) => w.space));
   showToast(on ? `Keine Warnung mehr für „${a.name}“. Rückgängig in ⚙ oder auf der Karte.` : `Warnung für „${a.name}“ wieder aktiv.`);
 }
 
@@ -649,8 +665,17 @@ function showTaskInfo() {
   as.replaceChildren();
   as.hidden = !info.inactiveAirspaces?.length;
   if (!as.hidden) {
+    const ti = taskInactiveSpaces();
     add("b", as, "Inaktive Lufträume");
-    add("span", as, info.inactiveAirspaces.join(", "));
+    const ul = document.createElement("ul");
+    for (const n of info.inactiveAirspaces) {
+      const hit = ti.matches.get(n)?.length;
+      add("li", ul, ti.active ? `${n} · ${hit ? "keine Warnung" : "nicht in der Luftraumdatei"}` : n);
+    }
+    as.appendChild(ul);
+    add("p", as, ti.active
+      ? "Für diese Lufträume warnt die App heute nicht."
+      : `Die Aufgabe ist vom ${info.date ? new Date(info.date).toLocaleDateString("de-AT") : "einem anderen Tag"}. Die Lufträume werden deshalb weiter gewarnt.`);
   }
 
   const rows = $("ti-points");
