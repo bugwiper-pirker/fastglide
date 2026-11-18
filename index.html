@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#15181c">
+  <meta name="description" content="Fahrt- und Höhenanzeige per GPS für den Segelflug">
+  <title>TravelSpeed</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1 class="brand">Travel<span>Speed</span></h1>
+      <span class="chip" id="status" data-state="wait"><i></i><span id="status-text">GPS SUCHT …</span></span>
+      <button id="day" aria-pressed="false" title="Tagmodus">☀</button>
+      <button id="fullscreen" title="Vollbild">⛶</button>
+      <button id="open-settings" title="Einstellungen">⚙</button>
+    </header>
+
+    <main class="gauges">
+      <section class="inst"><svg id="asi" role="img" aria-label="Fahrtmesser"></svg></section>
+      <section class="inst"><svg id="alt" role="img" aria-label="Höhenmesser"></svg></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings">
+      <h2>Einstellungen</h2>
+
+      <fieldset>
+        <legend>Höhe</legend>
+        <p class="hint">Die GPS-Höhe kann je nach Handy um rund 50 m von der Höhe über Meer abweichen.
+          Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen.</p>
+        <label>Platzhöhe (m)
+          <input id="field-elev" type="number" inputmode="numeric" placeholder="z. B. 432">
+        </label>
+        <button type="button" id="calibrate">Kalibrieren</button>
+        <p class="hint">Aktuelle GPS-Höhe (roh): <b id="gps-alt">keine</b></p>
+        <label>Korrektur (m)
+          <input id="alt-offset" type="number" inputmode="numeric" step="1">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Test</legend>
+        <label class="row"><input id="sim" type="checkbox"> Simulation statt GPS</label>
+      </fieldset>
+
+      <p class="hint warn">Die Fahrt ist die GPS-Geschwindigkeit über Grund, nicht die angezeigte Fahrt (IAS).
+        Sie ersetzt keinen Fahrtmesser.</p>
+
+      <button id="close-settings" class="primary">Schließen</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
