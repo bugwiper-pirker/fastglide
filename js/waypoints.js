@@ -11,7 +11,7 @@ const STORE_KEY = "ts-waypoints";
 // Landeplätze laut CUP-Style: 2 Flugplatz Gras, 3 Außenlandefeld, 4 Segelfluggelände, 5 Flugplatz Hartbelag
 export const LANDABLE = new Set([2, 3, 4, 5]);
 
-function splitCsv(line) {
+export function splitCsv(line) {
   const out = [];
   let cur = "", q = false;
   for (let i = 0; i < line.length; i++) {
@@ -28,7 +28,7 @@ function splitCsv(line) {
   return out;
 }
 
-function parseCoord(s, isLat) {
+export function parseCupCoord(s, isLat) {
   const re = isLat ? /^(\d{2})(\d{2}(?:\.\d+)?)([NS])$/i : /^(\d{3})(\d{2}(?:\.\d+)?)([EW])$/i;
   const m = re.exec(s.trim());
   if (!m) return null;
@@ -37,7 +37,7 @@ function parseCoord(s, isLat) {
   return v;
 }
 
-function parseElev(s) {
+export function parseElev(s) {
   const m = /^(-?\d+(?:\.\d+)?)\s*(m|ft)?$/i.exec((s || "").trim());
   if (!m) return null;
   const v = Number(m[1]);
@@ -63,8 +63,8 @@ export function parseCup(text) {
         continue;
       }
     }
-    const lat = parseCoord(f[idx.lat] || "", true);
-    const lon = parseCoord(f[idx.lon] || "", false);
+    const lat = parseCupCoord(f[idx.lat] || "", true);
+    const lon = parseCupCoord(f[idx.lon] || "", false);
     if (lat == null || lon == null) continue;
     points.push({
       name: f[idx.name] || "?",
@@ -128,11 +128,16 @@ export async function fetchDefaultWaypoints(url) {
   return readWaypointBuffer(await res.arrayBuffer());
 }
 
-export async function readWaypointBuffer(buf) {
+// Text einer .cup- oder .cupx-Datei (ZIP) als Zeichenkette
+export async function cupTextFromBuffer(buf) {
   const head = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
   const isZip = head[0] === 0x50 && head[1] === 0x4b; // "PK"
   const bytes = isZip ? await extractCupFromZip(buf) : new Uint8Array(buf);
-  const points = parseCup(decodeText(bytes));
+  return decodeText(bytes);
+}
+
+export async function readWaypointBuffer(buf) {
+  const points = parseCup(await cupTextFromBuffer(buf));
   if (!points.length) throw new Error("In der Datei wurden keine Wendepunkte gefunden. Ist es eine SeeYou-Datei (.cup)?");
   return points;
 }

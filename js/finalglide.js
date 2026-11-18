@@ -135,7 +135,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
 
   function select(i) {
     target = points[i] || null;
-    onSelect(target ? { name: target.name, code: target.code, lat: target.lat, lon: target.lon } : null);
+    onSelect(target ? { name: target.name, code: target.code, lat: target.lat, lon: target.lon, elev: target.elev } : null);
     render();
   }
 
@@ -154,12 +154,19 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
       target = null;
       if (saved) {
         target = points.find((x) => x.name === saved.name && x.code === saved.code &&
-          Math.abs(x.lat - saved.lat) < 1e-4 && Math.abs(x.lon - saved.lon) < 1e-4) || null;
+          Math.abs(x.lat - saved.lat) < 1e-4 && Math.abs(x.lon - saved.lon) < 1e-4) ||
+          // Ziel außerhalb der Liste (z. B. Wende aus der Aufgabe)
+          (saved.elev !== undefined ? { style: 0, ...saved } : null);
       }
       render();
     },
     update(p) { pos = p; render(); },
-    selectPoint(p) { select(points.indexOf(p)); },
+    // beliebigen Punkt als Ziel (z. B. Wende aus der Aufgabe)
+    selectPoint(p) {
+      target = p || null;
+      onSelect(target ? { name: target.name, code: target.code, lat: target.lat, lon: target.lon, elev: target.elev } : null);
+      render();
+    },
     render,
   };
 }

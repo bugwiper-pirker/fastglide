@@ -5,15 +5,17 @@ import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
-import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints } from "./waypoints.js";
+import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup } from "./waypoints.js";
+import { readTaskBuffer, saveTask, loadTask, clearTask } from "./task.js";
 import { startGps, startSimulation } from "./sources.js";
 import { createMapView } from "./map.js";
-import { readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
+import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey } from "./airspace.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
 const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false,
   asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
-  asIgnore: [], asTraActive: false, asCleared: false, page: "inst", mapSource: "osm" };
+  asIgnore: [], asTraActive: false, asCleared: false,
+  showAirspace: true, showTask: true, page: "inst", mapSource: "osm" };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -43,6 +45,7 @@ const fg = createFinalGlide({
 });
 let waypoints = loadWaypoints()?.points || [];
 let airspaces = loadAirspace()?.spaces || [];
+let task = loadTask()?.task || null;
 fg.setPoints(waypoints, settings.target);
 
 // ---------- Kartenseite ----------
@@ -69,6 +72,9 @@ function ensureMap() {
     toggleIgnore: (a) => setIgnored(a, !settings.asIgnore.includes(asKey(a))),
   });
   mapView.setAirspaces(airspaces);
+  mapView.setTask(task);
+  mapView.setLayerVisible("airspace", settings.showAirspace);
+  mapView.setLayerVisible("task", settings.showTask);
   mapView.setPoints(waypoints);
   mapView.setTarget(settings.target);
   if (lastPos) mapView.update(lastPos);
@@ -518,6 +524,7 @@ document.getElementById("open-settings").addEventListener("click", () => {
   varioWinIn.value = String(settings.varioWindow);
   safetyIn.value = settings.safetyHeight;
   showAsInfo();
+  updateLayerUi();
   asKmIn.value = String(settings.asWarnKm);
   asVIn.value = String(settings.asVMargin);
   asSoundIn.checked = settings.asAlertSound;
@@ -583,6 +590,127 @@ document.getElementById("fullscreen").addEventListener("click", async () => {
   } catch { showToast("Vollbild wird hier nicht unterstützt."); }
 });
 
+// ---------- Aufgabe ----------
+const taskInfo = document.getElementById("task-info");
+const taskChip = document.getElementById("task-chip");
+const tgAirspace = document.getElementById("tg-airspace");
+const tgTask = document.getElementById("tg-task");
+const showAirspaceIn = document.getElementById("show-airspace");
+const showTaskIn = document.getElementById("show-task");
+
+function taskSummary(t) {
+  const km = t.distanceKm.toLocaleString("de-AT", { maximumFractionDigits: 1 });
+  return `${t.name} · ${t.points.length - 2} Wenden · ${km} km` + (t.aat && t.taskTime ? ` · AAT ${t.taskTime.slice(0, 5)} h` : "");
+}
+function updateLayerUi() {
+  tgAirspace.setAttribute("aria-pressed", settings.showAirspace);
+  tgTask.setAttribute("aria-pressed", settings.showTask);
+  tgTask.hidden = !task;
+  taskChip.hidden = !task || !settings.showTask;
+  if (task) taskChip.textContent = taskSummary(task);
+  taskInfo.textContent = task ? taskSummary(task) : "Keine Aufgabe geladen";
+  showAirspaceIn.checked = settings.showAirspace;
+  showTaskIn.checked = settings.showTask;
+}
+function setLayer(name, on) {
+  if (name === "airspace") settings.showAirspace = on; else settings.showTask = on;
+  saveSettings();
+  mapView?.setLayerVisible(name, on);
+  updateLayerUi();
+}
+tgAirspace.addEventListener("click", () => setLayer("airspace", !settings.showAirspace));
+tgTask.addEventListener("click", () => setLayer("task", !settings.showTask));
+showAirspaceIn.addEventListener("change", () => setLayer("airspace", showAirspaceIn.checked));
+showTaskIn.addEventListener("change", () => setLayer("task", showTaskIn.checked));
+taskChip.addEventListener("click", () => mapView?.fitTask());
+
+function useTask(fileName, t) {
+  task = t;
+  try { saveTask(fileName, t); } catch {}
+  settings.showTask = true;
+  saveSettings();
+  if (dlg.open) dlg.close();
+  showPage("map");
+  mapView?.setTask(t);
+  mapView?.setLayerVisible("task", true);
+  updateLayerUi();
+  mapView?.fitTask();
+  showToast(`Aufgabe geladen: ${taskSummary(t)}`);
+}
+
+// Beliebige Datei erkennen: Aufgabe, Wendepunkte oder Lufträume
+async function importAnyFile(buf, name) {
+  const text = await cupTextFromBuffer(buf);
+  if (/\.tsk$/i.test(name) || text.trimStart().startsWith("<") || /-+\s*related tasks/i.test(text)) {
+    useTask(name, await readTaskBuffer(buf, name, waypoints));
+    return;
+  }
+  if (/^\s*AC\s/m.test(text)) {
+    const { text: t, spaces } = readAirspaceBuffer(buf, name);
+    try { saveAirspace(name, t); } catch {}
+    settings.asCleared = false; saveSettings();
+    useAirspaces(spaces);
+    showToast(`${spaces.length} Lufträume aus „${name}“ geladen.`);
+    return;
+  }
+  const pts = parseCup(text);
+  if (pts.length) {
+    useWaypoints(name, pts, false);
+    showToast(`${pts.length} Wendepunkte aus „${name}“ geladen.`);
+    return;
+  }
+  throw new Error("Die Datei wurde nicht erkannt. Unterstützt: SeeYou/LX .cup (Aufgabe oder Wendepunkte), XCSoar .tsk, OpenAir .txt.");
+}
+
+const taskFile = document.getElementById("task-file");
+taskFile.addEventListener("change", async () => {
+  const f = taskFile.files[0];
+  if (!f) return;
+  try { useTask(f.name, await readTaskBuffer(await f.arrayBuffer(), f.name, waypoints)); }
+  catch (e) { showToast(e.message || "Die Aufgabe konnte nicht gelesen werden."); }
+  taskFile.value = "";
+});
+document.getElementById("task-clear").addEventListener("click", () => {
+  task = null;
+  clearTask();
+  mapView?.setTask(null);
+  updateLayerUi();
+});
+const taskUrl = document.getElementById("task-url");
+document.getElementById("task-url-load").addEventListener("click", async () => {
+  const url = taskUrl.value.trim();
+  if (!/^https?:\/\//i.test(url)) { showToast("Bitte einen vollständigen Link einfügen (https://…)."); return; }
+  let res;
+  try { res = await fetch(url, { mode: "cors" }); }
+  catch {
+    showToast("Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → TravelSpeed“ oder „Aufgabendatei laden“ öffnen.");
+    return;
+  }
+  if (!res.ok) { showToast(`Der Link liefert einen Fehler (${res.status}).`); return; }
+  try {
+    const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "aufgabe.cup");
+    await importAnyFile(await res.arrayBuffer(), name);
+  } catch (e) {
+    showToast(e.message || "Unter diesem Link wurde keine Aufgabendatei gefunden. Bitte den Download-Link der Datei verwenden, nicht die Webseite.");
+  }
+});
+
+// „Teilen → TravelSpeed“: der Service Worker legt die Datei im Cache ab
+async function handleShared() {
+  if (!new URLSearchParams(location.search).has("share")) return;
+  history.replaceState(null, "", location.pathname);
+  try {
+    const cache = await caches.open("travelspeed-share");
+    const res = await cache.match("shared-file");
+    if (!res) { showToast("Keine geteilte Datei gefunden."); return; }
+    await cache.delete("shared-file");
+    const name = decodeURIComponent(res.headers.get("X-Name") || "datei");
+    await importAnyFile(await res.arrayBuffer(), name);
+  } catch (e) {
+    showToast(e.message || "Die geteilte Datei konnte nicht gelesen werden.");
+  }
+}
+
 // ---------- Start ----------
 applyDay();
 showPage(settings.page);
@@ -594,6 +722,8 @@ keepAwake();
 // Noch keine Wendepunkte am Handy: mitgelieferte Datei automatisch laden
 if (!waypoints.length && !settings.wpCleared) loadDefaultWaypoints(true);
 if (!airspaces.length && !settings.asCleared) loadDefaultAirspace(true);
+updateLayerUi();
+handleShared();
 requestAnimationFrame(frame);
 
 if ("serviceWorker" in navigator) {

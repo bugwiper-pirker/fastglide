@@ -24,6 +24,13 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Steigen und Höhe analog 
   - Tippen auf die Warnung schaltet sie 5 Minuten stumm. „Nicht mehr warnen“ setzt einen Luftraum dauerhaft auf die Ausnahmeliste, z. B. die MATZ am Heimatplatz. Rückgängig geht das in ⚙ oder im Popup auf der Karte.
   - Optional „TRAs als aktiv behandeln“: In einer TRA gibt es keine C/D-Warnung.
   - Grenzen der Prüfung: Verglichen wird mit der GPS-Höhe. FL ist Druckhöhe und kann um 100–300 m abweichen. AGL-Untergrenzen werden ohne Geländedaten ab Meereshöhe gerechnet, AGL-Obergrenzen als unbegrenzt. NOTAMs, MTAs und die Aktivierung von TRAs werden nicht berücksichtigt.
+- Kartenebenen: Auf der Karte schalten „Luftraum“ und „Aufgabe“ (oben rechts) die Ebenen ein und aus, ebenso in ⚙ → Kartenebenen. Ausgeblendete Lufträume werden weiter überwacht.
+- Aufgaben: SeeYou-/LX9000-Aufgaben (.cup mit „Related Tasks“, auch .cupx, so wie Soaring Spot sie liefert) und XCSoar-Aufgaben (.tsk).
+  - Laden über ⚙ → Aufgabe, über einen Download-Link (nur wenn der Server den direkten Abruf erlaubt) oder per **Teilen → TravelSpeed** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target).
+  - Beim Teilen erkennt die App den Dateityp selbst: Aufgabe, Wendepunkte (.cup) oder Lufträume (OpenAir .txt).
+  - Darstellung: Kurslinie, Start-/Ziellinie, Zylinder und Sektoren (Style 0–4, A1/R1, R2 für Schlüsselloch), nummerierte Punkte (S, 1, 2, …, Z). Tippen auf einen Punkt zeigt Zone und Höhe und bietet „Als Ziel wählen“ für den Endanflug. Der lila Balken unten zeigt Name, Wenden und Strecke, ein Tippen darauf zeigt die ganze Aufgabe.
+  - Die Strecke ist von Punktmitte zu Punktmitte gerechnet. Bei AAT ist das die nominelle Strecke, die Mindestzeit steht dabei.
+  - CUP: Takeoff und Landing im Aufgabenkopf werden übersprungen. ObsZone=0 ist der Start. Wendepunkte werden aus `Point=`-Zeilen, aus dem Wendepunktteil der Datei oder aus der geladenen Wendepunktliste genommen.
 - Höhenmesser 0–10 000 m. Der große Zeiger zeigt 100 m, der kleine 1000 m.
 - Höhenkorrektur: Am Boden die Platzhöhe eingeben und „Kalibrieren“ tippen. Viele Handys liefern die Höhe über dem Ellipsoid, das sind in Österreich etwa 45–50 m mehr als über Meer.
 - Der Bildschirm bleibt an.
@@ -59,6 +66,7 @@ js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
 js/map.js                   Kartenseite (Leaflet)
 js/airspace.js              Lufträume: OpenAir lesen, Warnlogik
+js/task.js                  Aufgaben: CUP und XCSoar .tsk lesen, Zonen-Geometrie
 vendor/leaflet/             Leaflet 1.9.4 (BSD-2-Clause), lokal für Offline-Betrieb
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente

@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "travelspeed-v9";
+const VERSION = "travelspeed-v10";
 const FILES = [
   "./",
   "index.html",
@@ -19,6 +19,7 @@ const FILES = [
   "js/finalglide.js",
   "js/map.js",
   "js/airspace.js",
+  "js/task.js",
   "data/2021_LOXN_Alle.cup",
   "data/austria_acg_airspaces_20261126.txt",
   "vendor/leaflet/leaflet.js",
@@ -39,7 +40,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== TILE_CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== TILE_CACHE && k !== SHARE_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -69,7 +70,25 @@ async function tileResponse(req) {
   }
 }
 
+// „Teilen → TravelSpeed“: geteilte Datei ablegen und die App öffnen
+const SHARE_CACHE = "travelspeed-share";
+async function receiveShare(req) {
+  try {
+    const form = await req.formData();
+    const file = form.get("file");
+    if (file) {
+      const cache = await caches.open(SHARE_CACHE);
+      await cache.put("shared-file", new Response(file, { headers: { "X-Name": encodeURIComponent(file.name || "datei") } }));
+    }
+  } catch {}
+  return Response.redirect("./?share=1", 303);
+}
+
 self.addEventListener("fetch", (e) => {
+  if (e.request.method === "POST" && new URL(e.request.url).pathname.endsWith("/share-target")) {
+    e.respondWith(receiveShare(e.request));
+    return;
+  }
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (isTile(url)) { e.respondWith(tileResponse(e.request)); return; }

@@ -3,6 +3,7 @@
 
 import { LANDABLE } from "./waypoints.js";
 import { CATEGORIES, airspacesAt } from "./airspace.js";
+import { zoneShapes, zoneText } from "./task.js";
 
 export const MAP_SOURCES = {
   osm: {
@@ -83,8 +84,63 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
     }
   }
 
+  // ---- Aufgabe (eigene Ebene über den Lufträumen) ----
+  map.createPane("task");
+  map.getPane("task").style.zIndex = 380;
+  const taskRenderer = L.canvas({ pane: "task", padding: 0.5 });
+  const taskLayer = L.layerGroup().addTo(map);
+  const TASK = "#5b21b6";
+  let task = null;
+  let showAirspace = true, showTask = true;
+
+  function taskPopup(p, i, n) {
+    const div = document.createElement("div");
+    div.className = "wp-pop";
+    const h = document.createElement("b");
+    h.textContent = `${i === 0 ? "Start" : i === n - 1 ? "Ziel" : "Wende " + i}: ${p.name}`;
+    const m = document.createElement("div");
+    m.textContent = [zoneText(p.oz, i, n), p.elev == null ? "" : `${Math.round(p.elev)} m`].filter(Boolean).join(" · ");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Als Ziel wählen";
+    btn.addEventListener("click", () => { onPickTarget(p); map.closePopup(); });
+    div.append(h, m, btn);
+    return div;
+  }
+
+  function drawTask() {
+    taskLayer.clearLayers();
+    if (!task || !showTask) return;
+    const n = task.points.length;
+    const shapes = zoneShapes(task);
+    for (const list of shapes) {
+      for (const s of list) {
+        if (s.kind === "line") {
+          L.polyline(s.latlngs, { renderer: taskRenderer, pane: "task", color: TASK, weight: 5, interactive: false }).addTo(taskLayer);
+        } else {
+          L.polygon(s.latlngs, { renderer: taskRenderer, pane: "task", color: TASK, weight: 2, fillColor: TASK, fillOpacity: 0.12, interactive: false }).addTo(taskLayer);
+        }
+      }
+    }
+    const ll = task.points.map((p) => [p.lat, p.lon]);
+    L.polyline(ll, { renderer: taskRenderer, pane: "task", color: "#ffffff", weight: 8, opacity: 0.9, interactive: false }).addTo(taskLayer);
+    L.polyline(ll, { renderer: taskRenderer, pane: "task", color: TASK, weight: 4, interactive: false }).addTo(taskLayer);
+    const first = task.points[0], last = task.points[n - 1];
+    const sameStartFinish = Math.abs(first.lat - last.lat) < 1e-5 && Math.abs(first.lon - last.lon) < 1e-5;
+    task.points.forEach((p, i) => {
+      if (i === n - 1 && sameStartFinish) return; // Start = Ziel: ein gemeinsamer Punkt
+      const label = i === 0 ? (sameStartFinish ? "S/Z" : "S") : i === n - 1 ? "Z" : String(i);
+      const w = label.length > 1 ? 38 : 26;
+      L.marker([p.lat, p.lon], {
+        icon: L.divIcon({ className: "task-pt", html: label, iconSize: [w, 26], iconAnchor: [w / 2, 13] }),
+        keyboard: false, zIndexOffset: 500, bubblingMouseEvents: false,
+      }).bindPopup(() => taskPopup(p, i, n)).addTo(taskLayer);
+    });
+  }
+
   // Tippen auf die Karte: alle Lufträume an dieser Stelle anzeigen
   map.on("click", (e) => {
+    if (!showAirspace) return;
     const hits = airspacesAt(spaces, e.latlng.lat, e.latlng.lng);
     if (!hits.length) return;
     hits.sort((a, b) => a.lower.m - b.lower.m);
@@ -227,11 +283,30 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
       pos = p;
       draw();
       if (!pos) return;
-      if (firstFix) { firstFix = false; map.setView([pos.lat, pos.lon], 11); }
+      if (firstFix) { firstFix = false; map.setView([pos.lat, pos.lon], 11, { animate: false }); }
       else if (follow) map.panTo([pos.lat, pos.lon], { animate: true, duration: 0.5 });
     },
     setPoints(p) { points = p || []; drawPoints(); },
     setAirspaces(a) { spaces = a || []; drawAirspaces(); },
+    setTask(t) { task = t; drawTask(); },
+    // Ebenen ein-/ausblenden
+    setLayerVisible(name, on) {
+      if (name === "airspace") {
+        showAirspace = on;
+        if (on && !map.hasLayer(asLayer)) asLayer.addTo(map);
+        if (!on && map.hasLayer(asLayer)) map.removeLayer(asLayer);
+      } else if (name === "task") {
+        showTask = on;
+        drawTask();
+      }
+    },
+    fitTask() {
+      if (!task) return;
+      firstFix = false; // erste GPS-Position soll die Übersicht nicht überschreiben
+      map.stop();
+      map.fitBounds(task.points.map((p) => [p.lat, p.lon]), { padding: [40, 40], animate: false });
+      setFollow(false);
+    },
     // gewarnte Lufträume hervorheben
     setWarned(list) {
       for (const [a, poly] of polyOf) {

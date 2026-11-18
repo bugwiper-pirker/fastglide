@@ -56,6 +56,11 @@
       <div class="map-wrap">
         <div id="map" aria-label="Karte"></div>
         <button id="recenter" class="recenter" title="Auf Flugzeug zentrieren" hidden>⌖</button>
+        <div class="map-toggles">
+          <button id="tg-airspace" type="button" aria-pressed="true">Luftraum</button>
+          <button id="tg-task" type="button" aria-pressed="true" hidden>Aufgabe</button>
+        </div>
+        <button id="task-chip" class="task-chip" type="button" title="Ganze Aufgabe zeigen" hidden></button>
       </div>
       <div class="digi">
         <div class="digi-c"><span class="fg-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b> km/h</span></div>
@@ -113,6 +118,28 @@
           <input id="safe-glide" type="number" inputmode="numeric" step="1" min="5">
         </label>
         <p class="hint">Gelb bis zur besten Gleitzahl des Flugzeugs, darüber rot. Die Rechnung berücksichtigt weder Wind noch Sinken.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Aufgabe</legend>
+        <p class="hint">Wettbewerbsaufgabe laden: SeeYou-/LX9000-Aufgabe (.cup mit „Related Tasks“, auch .cupx) oder XCSoar (.tsk).
+          Von Soaring Spot die Aufgabe am Handy herunterladen und mit <b>Teilen → TravelSpeed</b> öffnen oder hier auswählen.</p>
+        <label>Aufgabendatei
+          <input id="task-file" type="file" accept=".cup,.cupx,.tsk,.xml,.txt">
+        </label>
+        <label>Oder Download-Link der Aufgabe
+          <input id="task-url" type="url" inputmode="url" placeholder="https://…/aufgabe.cup">
+        </label>
+        <button type="button" id="task-url-load">Von Link laden</button>
+        <p class="hint"><b id="task-info">Keine Aufgabe geladen</b></p>
+        <button type="button" id="task-clear">Aufgabe löschen</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Kartenebenen</legend>
+        <label class="row"><input id="show-airspace" type="checkbox"> Lufträume anzeigen</label>
+        <label class="row"><input id="show-task" type="checkbox"> Aufgabe anzeigen</label>
+        <p class="hint">Ausgeblendete Lufträume werden weiterhin überwacht, die Warnung bleibt aktiv.</p>
       </fieldset>
 
       <fieldset>
