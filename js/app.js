@@ -1,6 +1,6 @@
 import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE, SOARINGSPOT_PROXY } from "./config.js";
 import { createAirspeed } from "./instruments/airspeed.js";
-import { createAltimeter } from "./instruments/altimeter.js";
+import { createAltimeter, ftText, flText } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
@@ -59,6 +59,7 @@ const digi = {
   var: document.getElementById("d-var"),
   avg: document.getElementById("d-avg"),
   alt: document.getElementById("d-alt"),
+  altFt: document.getElementById("d-altft"),
 };
 function ensureMap() {
   if (mapView) return mapView;
@@ -101,6 +102,7 @@ function updateDigital() {
   digi.spd.textContent = spd == null ? "---" : Math.round(spd);
   digi.var.textContent = v == null ? "---" : fmtVar(v);
   digi.alt.textContent = alt == null ? "-----" : fmtAlt(alt);
+  digi.altFt.textContent = alt == null ? "---- ft · FL ---" : `${ftText(alt)} · ${flText(alt)}`;
   const avg = varioInst.extraVal?.avg;
   digi.avg.textContent = avg == null ? "Ø ---" : `Ø ${fmtVar(avg)}`;
 }

@@ -310,4 +310,9 @@ export function checkAirspace(spaces, pos, opts) {
   return out;
 }
 
-export const altText = (a) => `${a.lower.text} – ${a.upper.text}`;
+// Grenze mit Meterangabe: "3500 ft MSL (1067 m)", "FL 95 (2896 m)". Angaben in m bleiben, wie sie sind.
+export function limitText(x) {
+  if (!Number.isFinite(x.m) || x.ref === "GND" || / m /.test(` ${x.text} `)) return x.text;
+  return `${x.text} (${Math.round(x.m).toLocaleString("de-AT")} m${x.ref === "AGL" ? " AGL" : ""})`;
+}
+export const altText = (a) => `${limitText(a.lower)} – ${limitText(a.upper)}`;
