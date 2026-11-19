@@ -211,7 +211,11 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
   background: var(--accent); color: #111; box-shadow: 0 2px 8px rgb(0 0 0 / .35);
 }
 /* Digitale Anzeigen: oben über dem Endanflug. Auf der Instrumentenseite nur Sollfahrt, Wind und Schnitt. */
-.digi { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.digi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.d-taskv { grid-column: span 2; }
+body:not(.has-task) .d-dist, body:not(.has-task) .d-olc, body:not(.has-task) .d-olcv { grid-column: span 2; }
+.d-phase[data-mode="thermal"] .digi-n b { color: var(--green); }
+.d-phase[data-mode="thermal"][data-sink] .digi-n b { color: var(--red); }
 .digi-c { background: var(--face); border: 1px solid var(--bezel); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 0; }
 button.digi-c { font: inherit; color: inherit; text-align: left; min-height: 0; cursor: pointer; }
 .digi-c .fg-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -224,13 +228,15 @@ button.digi-c { font: inherit; color: inherit; text-align: left; min-height: 0; 
 .wind-arr { font-style: normal; font-weight: 700; font-size: 1.2rem; color: var(--accent); display: inline-block; align-self: center; transition: transform .6s ease-out; }
 .wind-arr[data-off] { opacity: .2; }
 body:not(.has-task) .d-task { display: none; }
-body:not(.map-page) .digi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-body:not(.map-page) .digi > * { display: none; }
-body:not(.map-page) .d-stf, body:not(.map-page) .d-windt,
+body:not(.map-page) .digi { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+body:not(.map-page) .digi > * { display: none; grid-column: auto; }
+body:not(.map-page) .d-stf, body:not(.map-page) .d-windt, body:not(.map-page) .d-phase,
 body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-taskv { display: flex; }
 @media (max-width: 700px) {
   body.map-page .digi { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
-  body.map-page .d-task { grid-column: span 2; }
+  body.map-page .digi > * { grid-column: auto; }
+  body.map-page .d-taskv { grid-column: span 2; }
+  body.map-page:not(.has-task) .d-olcv { grid-column: span 4; }
   .digi-c { padding: 3px 6px; border-radius: 8px; }
   .digi-c .fg-k { font-size: .56rem; letter-spacing: .04em; }
   .digi-n { font-size: .66rem; gap: 2px; }

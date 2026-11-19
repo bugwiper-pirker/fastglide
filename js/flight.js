@@ -104,6 +104,7 @@ export function createFlightAnalyzer() {
       launchT: null, launchSrc: null, manualT: null, glide: [],
       trace: [], traceStep: 10000, olc: null,
       cum: 0, hist: [], free60: null,
+      recent: [], thermal: null, seg: null, lastThermal: null, phaseEnd: null,
     };
   }
   reset();
@@ -121,6 +122,7 @@ export function createFlightAnalyzer() {
       s.since ??= f.t;
       if (f.t - s.since >= (turning ? CIRCLE_ON_S : CIRCLE_OFF_S) * 1000) {
         s.circling = turning;
+        s.phaseEnd = s.since; // da hat das Kreisen begonnen bzw. aufgehört
         s.since = null;
         s.circle = null;
         if (turning) s.turnStart = f.t - CIRCLE_ON_S * 1000;
@@ -223,6 +225,21 @@ export function createFlightAnalyzer() {
 
   function startT() { return s.manualT ?? s.launchT; }
 
+  // Bart (beim Kreisen) und Gleitflug (dazwischen): Beginn mit Zeit, Ort und Höhe
+  function updatePhase(f) {
+    if (f.alt == null) return;
+    s.recent.push({ t: f.t, lat: f.lat, lon: f.lon, alt: f.alt });
+    while (s.recent.length && s.recent[0].t < f.t - 90000) s.recent.shift();
+    const at = (t) => s.recent.find((x) => x.t >= t) || s.recent[0];
+    if (s.circling) {
+      if (!s.thermal) { s.thermal = { ...at(s.turnStart) }; s.seg = null; }
+    } else {
+      if (s.thermal) { s.lastThermal = { ...s.thermal, end: at(s.phaseEnd ?? f.t) }; s.thermal = null; s.seg = { ...at(s.phaseEnd ?? f.t) }; }
+      // erster Gleitflug: ab Ausklinken bzw. Motor aus
+      if (!s.seg && s.launchT != null) s.seg = { ...at(s.launchT) };
+    }
+  }
+
   // geflogene Strecke ab Abheben und Verlauf alle 10 s für die 60-Minuten-Mittel
   function updateHistory(f) {
     if (!s.airborne) return;
@@ -266,6 +283,7 @@ export function createFlightAnalyzer() {
       updateCircling(f, dt);
       updateAir(f, polar);
       updateLaunch(f, dt);
+      updatePhase(f);
       updateTrace(f);
       updateHistory(f);
       s.prev = f;
@@ -285,6 +303,27 @@ export function createFlightAnalyzer() {
     },
     get airspeed() { return { tas: s.tas, ias: s.ias, gs: s.gs, fromWind: !!this.wind || !!s.loggerAir, logger: !!s.loggerAir }; },
     get netto() { return s.netto; },
+    // Aktueller Abschnitt: im Bart das mittlere Steigen seit Beginn des Kreisens,
+    // im Gleitflug Strecke (Luftlinie), Schnitt und Gleitzahl seit dem letzten Bart
+    phase() {
+      const p = s.prev;
+      if (!p || p.alt == null) return null;
+      if (s.thermal) {
+        const sec = (p.t - s.thermal.t) / 1000;
+        return { mode: "thermal", sec, gain: p.alt - s.thermal.alt, climb: sec > 0 ? (p.alt - s.thermal.alt) / sec : null };
+      }
+      if (s.seg) {
+        const g = s.seg, sec = (p.t - g.t) / 1000;
+        const km = chordKm(vec(g.lat, g.lon), vec(p.lat, p.lon));
+        const lost = g.alt - p.alt;
+        const last = s.lastThermal;
+        return {
+          mode: "glide", sec, km, speed: sec > 10 ? km / (sec / 3600) : null, ld: lost > 20 ? (km * 1000) / lost : null,
+          lastClimb: last ? (last.end.alt - last.alt) / Math.max(1, (last.end.t - last.t) / 1000) : null,
+        };
+      }
+      return null;
+    },
     // geflogene Strecke seit dem Abheben, dazu Schnitt der letzten 60 min entlang der Spur
     flown() {
       if (!s.airborne || !s.prev) return null;

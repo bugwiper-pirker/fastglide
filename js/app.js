@@ -7,7 +7,7 @@ import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
 import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup, distanceKm, LANDABLE } from "./waypoints.js";
 import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl, zoneText } from "./task.js";
-import { startGps, startSimulation } from "./sources.js";
+import { startGps, startSimulation, bearingDeg } from "./sources.js";
 import { isIgc, parseIgc } from "./igc.js";
 import { createReplay } from "./replay.js";
 import { createMap3d } from "./map3d.js";
@@ -108,6 +108,11 @@ const pageBtn = document.getElementById("page");
 const digi = {
   spdK: document.getElementById("d-spd-k"),
   spdS: document.getElementById("d-spd-s"),
+  ph: document.getElementById("d-ph"),
+  phK: document.getElementById("d-ph-k"),
+  phU: document.getElementById("d-ph-u"),
+  phS: document.getElementById("d-ph-s"),
+  phBox: document.querySelector(".d-phase"),
   stf: document.getElementById("d-stf"),
   stfCmd: document.getElementById("d-stf-cmd"),
   stfS: document.getElementById("d-stf-s"),
@@ -272,6 +277,28 @@ function renderPerf() {
   setWindArrow(w ? w.from : null);
   digi.windS.textContent = w60 ? `Ø60 ${dir3(w60.from)}/${Math.round(w60.speed * 3.6)}` : "Ø60 ---";
 
+  // Bart: mittleres Steigen seit Beginn des Kreisens; Gleitflug: Strecke, Schnitt, Gleitzahl
+  const ph = analyzer.phase();
+  const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+  digi.phBox.dataset.mode = ph?.mode || "";
+  if (ph?.mode === "thermal") {
+    digi.phK.textContent = "Bartsteigen";
+    digi.ph.textContent = ph.climb == null ? "---" : fmtVar(ph.climb);
+    digi.phU.textContent = "m/s";
+    if (ph.climb < 0) digi.phBox.dataset.sink = ""; else delete digi.phBox.dataset.sink;
+    digi.phS.textContent = `${mmss(ph.sec)} · ${ph.gain >= 0 ? "+" : "−"}${Math.abs(Math.round(ph.gain))} m`;
+  } else if (ph?.mode === "glide") {
+    digi.phK.textContent = "Gleitflug";
+    digi.ph.textContent = fmt1(ph.km);
+    digi.phU.textContent = "km";
+    digi.phS.textContent = `${ph.speed == null ? "--" : Math.round(ph.speed)} km/h · GZ ${ph.ld == null || ph.ld > 200 ? "--" : Math.round(ph.ld)}`;
+  } else {
+    digi.phK.textContent = "Bart / Gleiten";
+    digi.ph.textContent = "---";
+    digi.phU.textContent = "";
+    digi.phS.textContent = "---";
+  }
+
   // Weg geflogen (ganze Spur) und OLC (6 Schenkel)
   const fw = analyzer.flown();
   digi.dist.textContent = fw ? fmtKmT(fw.km) : "---";
@@ -356,7 +383,15 @@ function onData(d) {
   };
   fg.update(pos);
   if (pos) { lastPos = pos; mapView?.update(pos); }
-  if (pos && map3d && settings.map3d && settings.page === "map") map3d.update({ ...pos, speedKmh: d.speedKmh, vario: c.vario, time: d.time });
+  if (pos && map3d && settings.map3d && settings.page === "map") {
+    // Blickrichtung beim Kreisen: zur nächsten Wende bzw. zum Ziel
+    const r = tracker.result();
+    const ahead = r?.state === "run" ? task.points[r.next] : settings.target;
+    map3d.update({
+      ...pos, speedKmh: d.speedKmh, vario: c.vario, time: d.time, circling: analyzer.circling,
+      aheadBearing: ahead ? bearingDeg(pos.lat, pos.lon, ahead.lat, ahead.lon) : null,
+    });
+  }
   updateAirspaceWarnings(pos ? { ...pos, speedKmh: d.speedKmh } : null);
   setStatus("ok", d.replay ? `FLUG ${replay?.speed ?? ""}×` : settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }

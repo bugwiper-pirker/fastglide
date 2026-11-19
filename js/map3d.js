@@ -183,6 +183,13 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   let target = null;            // letzte Position vom GPS / aus dem Flug
   let cur = null;               // geglättet für die Darstellung
   let bank = 0, prevTrack = null, prevTime = null;
+  // Ruhige Kamera beim Kreisen: Blick bleibt in der weiteren Flugrichtung, Mitte ist die Bartmitte
+  let circling = false, holdBearing = null, ahead = null;
+  let recent = [];                 // letzte Positionen (Zeit, Ort, Kurs)
+  let thermalC = null;             // geglättete Bartmitte
+  let blend = 0;                   // 0 = dem Flugzeug folgen, 1 = Bartmitte
+  let view = null;                 // { bearing } der Kamera
+  let zoomOut = 0;                 // beim Kreisen weiter weg (Zoomstufen)
   // Kamera um das Flugzeug: Drehung gegenüber „von hinten“, Neigung, Zoom
   const PITCH = 78, ZOOM = 16;
   let bearingOffset = 0, viewPitch = PITCH, zoom = ZOOM;
@@ -278,7 +285,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
         // Zoomen macht es größer oder kleiner, aber nie kleiner als 50 Pixel Spannweite
         const mpp = (z) => (40075016.7 * Math.cos((cur.lat * Math.PI) / 180)) / (512 * 2 ** z);
         const want = Math.min(300, Math.max(130, container.clientWidth * 0.33));
-        const s = Math.max(1, (want * mpp(ZOOM)) / 20, (50 * mpp(map.getZoom())) / 20);
+        // beim Kreisen schrumpft das Flugzeug nur halb so stark wie die Landschaft
+        const s = Math.max(1, (want * mpp(ZOOM - zoomOut * 0.5)) / 20, (50 * mpp(map.getZoom())) / 20);
         const rad = (d) => (d * Math.PI) / 180;
         const m = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
@@ -417,9 +425,21 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     const jump = Math.abs(target.lat - cur.lat) + Math.abs(target.lon - cur.lon) > 0.05;
     for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = jump ? target[key] : cur[key] + ((target[key] ?? 0) - (cur[key] ?? 0)) * k;
     cur.track = jump ? target.track : (cur.track + angDiff(target.track, cur.track) * k + 360) % 360;
+
+    // Kamera: geradeaus hinter dem Flugzeug (gedämpft), beim Kreisen fest in die weitere Richtung
+    // und auf die Bartmitte, das Flugzeug kreist dann im Bild
+    blend = jump ? (circling ? 1 : 0) : clamp(blend + (circling && thermalC ? dt : -dt) / 2.5, 0, 1);
+    const wantBearing = circling && holdBearing != null ? holdBearing : cur.track;
+    if (!view || jump) view = { bearing: wantBearing };
+    else view.bearing = (view.bearing + angDiff(wantBearing, view.bearing) * Math.min(1, dt * (circling ? 0.8 : 1.5)) + 360) % 360;
+    const ease = blend * blend * (3 - 2 * blend);
+    zoomOut = 1 * ease;
+    const cLat = thermalC ? cur.lat + (thermalC.lat - cur.lat) * ease : cur.lat;
+    const cLon = thermalC ? cur.lon + (thermalC.lon - cur.lon) * ease : cur.lon;
     // Flugzeug im unteren Drittel, darüber Gelände und Horizont
     map.jumpTo({
-      center: [cur.lon, cur.lat], elevation: cur.alt, zoom, bearing: cur.track + bearingOffset, pitch: viewPitch,
+      // beim Kreisen etwas weiter weg, damit der ganze Kreis ins Bild passt
+      center: [cLon, cLat], elevation: cur.alt, zoom: zoom - zoomOut, bearing: view.bearing + bearingOffset, pitch: viewPitch,
       padding: { top: container.clientHeight * 0.3 * (viewPitch / 85), bottom: 0, left: 0, right: 0 },
     });
   }
@@ -438,6 +458,26 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       }
       prevTrack = track; prevTime = p.time;
       target = { lat: p.lat, lon: p.lon, alt: p.alt ?? 0, track, speed: p.speedKmh || 0, vario: p.vario || 0 };
+
+      // Verlauf für Bartmitte und Kurs vor dem Kreisen; nach einem Sprung neu
+      const t = p.time ?? Date.now();
+      if (recent.length && (t < recent.at(-1).t || t - recent.at(-1).t > 120000)) { recent = []; thermalC = null; }
+      recent.push({ t, lat: p.lat, lon: p.lon, track });
+      while (recent.length && recent[0].t < t - 90000) recent.shift();
+      ahead = p.aheadBearing ?? null;
+      if (p.circling && !circling) {
+        // Kurs vor dem Kreisen (Erkennung braucht etwa 15 s), sonst Richtung zur nächsten Wende
+        const before = recent.find((x) => x.t >= t - 25000) || recent[0];
+        holdBearing = ahead ?? before.track;
+      }
+      if (p.circling && ahead != null && holdBearing != null) holdBearing = (holdBearing + angDiff(ahead, holdBearing) * 0.05 + 360) % 360;
+      circling = !!p.circling;
+      if (circling) {
+        // Bartmitte: Mittel der Positionen der letzten 30 s (etwa ein Kreis)
+        const pts = recent.filter((x) => x.t >= t - 30000);
+        const c = { lat: pts.reduce((a, x) => a + x.lat, 0) / pts.length, lon: pts.reduce((a, x) => a + x.lon, 0) / pts.length };
+        thermalC = thermalC ? { lat: thermalC.lat + (c.lat - thermalC.lat) * 0.15, lon: thermalC.lon + (c.lon - thermalC.lon) * 0.15 } : c;
+      } else if (blend <= 0) thermalC = null;
       if (!cur) map.jumpTo({ center: [p.lon, p.lat], elevation: target.alt, zoom, bearing: track, pitch: viewPitch });
     },
     setFlight(f, altOffset = 0) {
