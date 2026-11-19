@@ -19,7 +19,7 @@ import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspac
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
 const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, target: null, wpCleared: false,
-  polar: POLARS[0].id, mc: 1, wingLoading: null, bugs: 0, stfTone: true,
+  polar: POLARS[0].id, mc: 1, wingLoading: null, bugs: 0, stfTone: true, igcAir: true,
   asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
   asIgnore: [], asTraActive: false, asCleared: false,
   showAirspace: true, showTask: true, page: "inst", mapSource: "osm", map3d: false, map3dImagery: "sat" };
@@ -51,6 +51,7 @@ function buildPolar() {
   return makePolar(def, { wingLoading: settings.wingLoading ?? refWingLoading(def), bugs: settings.bugs });
 }
 const analyzer = createFlightAnalyzer();
+analyzer.setUseLogger(settings.igcAir);
 const tracker = createTaskTracker();
 let fixLog = [];     // verarbeitete Punkte, damit eine neu geladene Aufgabe nachgerechnet werden kann
 let perf = null;     // letzte Werte für die Anzeige
@@ -93,13 +94,24 @@ const mapPage = document.getElementById("mapview");
 const pageBtn = document.getElementById("page");
 const digi = {
   spdK: document.getElementById("d-spd-k"),
-  wind: document.getElementById("d-wind"),
+  spdS: document.getElementById("d-spd-s"),
   stf: document.getElementById("d-stf"),
   stfCmd: document.getElementById("d-stf-cmd"),
   stfS: document.getElementById("d-stf-s"),
-  tskK: document.getElementById("d-tsk-k"),
-  tsk: document.getElementById("d-tsk"),
-  tskS: document.getElementById("d-tsk-s"),
+  windK: document.getElementById("d-wind-k"),
+  wind: document.getElementById("d-wind"),
+  windArr: document.getElementById("d-wind-arr"),
+  windS: document.getElementById("d-wind-s"),
+  dist: document.getElementById("d-dist"),
+  distS: document.getElementById("d-dist-s"),
+  olc: document.getElementById("d-olc"),
+  olcS: document.getElementById("d-olc-s"),
+  olcv: document.getElementById("d-olcv"),
+  olcvS: document.getElementById("d-olcv-s"),
+  task: document.getElementById("d-task"),
+  taskS: document.getElementById("d-task-s"),
+  taskv: document.getElementById("d-taskv"),
+  taskvS: document.getElementById("d-taskv-s"),
   spd: document.getElementById("d-spd"),
   var: document.getElementById("d-var"),
   avg: document.getElementById("d-avg"),
@@ -217,17 +229,57 @@ function updatePerf(d) {
   // beim Kreisen die Sollfahrt für den nächsten Gleitflug (ohne Netto)
   const stf = polar.stf(settings.mc, analyzer.circling ? 0 : netto ?? 0) * 3.6;
   const speed = ias ?? d.speedKmh;
-  perf = { ias, gs: d.speedKmh, wind, netto, stf, speed, circling: analyzer.circling };
-  asiInst.inst.setLabel(ias != null ? "IAS ber." : "GS");
+  perf = { ias, gs: d.speedKmh, wind, netto, stf, speed, circling: analyzer.circling, logger: air.logger };
+  asiInst.inst.setLabel(air.logger ? "IAS Logger" : ias != null ? "IAS ber." : "GS");
   asiInst.inst.setBug(d.speedKmh == null ? null : stf);
   const flying = d.speedKmh != null && d.speedKmh > 40;
   audio.setStf(settings.stfTone && flying && !perf.circling && speed != null ? speed - stf : null);
 }
 
+// Windpfeil: zeigt, wohin der Wind weht (Karte nordausgerichtet), immer auf dem kürzeren Weg drehen
+let windArrAngle = 0;
+function setWindArrow(from) {
+  if (from == null) { digi.windArr.dataset.off = ""; return; }
+  delete digi.windArr.dataset.off;
+  windArrAngle += ((from - windArrAngle) % 360 + 540) % 360 - 180;
+  digi.windArr.style.transform = `rotate(${windArrAngle}deg)`;
+}
+const dir3 = (deg) => `${String(Math.round(deg / 5) * 5 % 360).padStart(3, "0")}°`;
+const avg60 = (v) => `Ø60 ${v == null ? "---" : Math.round(v)}`;
+
 function renderPerf() {
   const p = perf;
-  digi.spdK.textContent = p?.ias != null ? "Fahrt IAS ber." : "Fahrt GS";
-  digi.wind.textContent = !p ? "Wind ---" : p.wind ? `GS ${p.gs == null ? "--" : Math.round(p.gs)} · Wind ${windText(p.wind)}` : "Wind unbekannt";
+  digi.spdK.textContent = p?.logger ? "IAS Logger" : p?.ias != null ? "IAS ber." : "Fahrt GS";
+  digi.spdS.textContent = !p || p.gs == null ? "---" : p.ias != null ? `GS ${Math.round(p.gs)}` : "über Grund";
+
+  // Wind: aktuell groß, darunter das Mittel der letzten 60 min
+  const w = p?.wind, w60 = analyzer.wind60();
+  digi.windK.textContent = w ? `Wind ${dir3(w.from)}` : "Wind";
+  digi.wind.textContent = w ? Math.round(w.speed * 3.6) : "--";
+  setWindArrow(w ? w.from : null);
+  digi.windS.textContent = w60 ? `Ø60 ${dir3(w60.from)}/${Math.round(w60.speed * 3.6)}` : "Ø60 ---";
+
+  // Weg geflogen (ganze Spur) und OLC (6 Schenkel)
+  const fw = analyzer.flown();
+  digi.dist.textContent = fw ? fmtKmT(fw.km) : "---";
+  digi.distS.textContent = avg60(fw?.speed60);
+  const fr = analyzer.free();
+  const h = fr.startT != null ? (fr.t - fr.startT) / 3600000 : 0;
+  digi.olc.textContent = fr.startT != null ? fmtKmT(fr.km) : "---";
+  digi.olcS.textContent = fr.startT != null ? `ab ${clockText(fr.startT)}` : fr.src;
+  digi.olcv.textContent = fr.startT != null && h > 1 / 60 ? fmt1(fr.km / h) : "---";
+  digi.olcvS.textContent = avg60(analyzer.freeSpeed60());
+
+  // Aufgabe
+  const r = tracker.result();
+  document.body.classList.toggle("has-task", !!r);
+  if (r) {
+    digi.task.textContent = r.state === "pre" ? "---" : fmtKmT(r.km);
+    digi.taskS.textContent = r.state === "pre" ? "vor dem Abflug" : r.state === "done" ? `Ziel ${clockText(r.finishT)}` : `ab ${clockText(r.startT)}`;
+    digi.taskv.textContent = r.speedKmh != null ? fmt1(r.speedKmh) : "---";
+    digi.taskvS.textContent = avg60(r.speed60);
+  }
+
   digi.stf.textContent = p ? Math.round(p.stf) : "---";
   let cmd = "", dir = "";
   if (p && !p.circling && p.speed != null && p.gs > 40) {
@@ -240,19 +292,6 @@ function renderPerf() {
   digi.stfCmd.dataset.dir = dir;
   digi.stfCmd.title = dir === "pull" ? "zu schnell: ziehen" : dir === "push" ? "zu langsam: drücken" : "";
   digi.stfS.textContent = `MC ${fmt1(settings.mc)}` + (!p ? "" : p.circling ? " · Kreisen" : p.netto != null ? ` · Netto ${fmtVar(p.netto)}` : " · ohne Wind");
-
-  const r = tracker.result();
-  if (r) {
-    digi.tskK.textContent = "Schnitt Aufgabe";
-    digi.tsk.textContent = r.speedKmh != null ? fmt1(r.speedKmh) : "---";
-    digi.tskS.textContent = r.state === "pre" ? "vor dem Abflug" : r.state === "done" ? `Ziel ${clockText(r.finishT)} · ${fmtKmT(r.km)} km` : `${fmtKmT(r.km)} km · ab ${clockText(r.startT)}`;
-  } else {
-    const fr = analyzer.free();
-    const h = fr.startT != null ? (fr.t - fr.startT) / 3600000 : 0;
-    digi.tskK.textContent = "Schnitt frei";
-    digi.tsk.textContent = fr.startT != null && h > 1 / 60 ? fmt1(fr.km / h) : "---";
-    digi.tskS.textContent = fr.startT != null ? `${fmtKmT(fr.km)} km (6 Schenkel) · ab ${clockText(fr.startT)}` : fr.src;
-  }
 }
 
 // ---------- Datenfluss ----------
@@ -277,7 +316,7 @@ function onData(d) {
       const from = fixLog.at(-1)?.t ?? -Infinity;
       for (const x of replayFlight.fixes) {
         if (x.t > d.time) break;
-        if (x.t > from) feedFix({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + replayOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl });
+        if (x.t > from) feedFix({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + replayOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl, tas: x.tas, ias: x.ias, wind: x.wind });
       }
     } else for (const x of d.samples || []) feedFix(x);
   } else if (d.lat != null) {
@@ -757,6 +796,18 @@ function openStf() { fillStfDlg(); stfDlg.showModal(); }
 document.getElementById("d-stf-box").addEventListener("click", openStf);
 document.getElementById("open-stf").addEventListener("click", openStf);
 polarIn.addEventListener("change", () => { settings.polar = polarIn.value; settings.wingLoading = null; applyStf(); });
+const igcAirIn = document.getElementById("igc-air");
+igcAirIn.addEventListener("change", () => {
+  settings.igcAir = igcAirIn.checked;
+  saveSettings();
+  analyzer.setUseLogger(settings.igcAir);
+  // bisherige Punkte mit der neuen Quelle nachrechnen
+  const log = fixLog;
+  resetAnalysis();
+  for (const f of log) feedFix(f);
+  if (last) updatePerf(last);
+  renderPerf();
+});
 stfToneIn.addEventListener("change", () => { settings.stfTone = stfToneIn.checked; saveSettings(); if (last) updatePerf(last); });
 
 // ---------- Schnitt: Details und Start von Hand ----------
@@ -777,18 +828,25 @@ function showAvg() {
       if (r.speedKmh != null) add("Schnitt", `${fmt1(r.speedKmh)} km/h`);
     }
   }
+  if (r?.speed60 != null) add("Schnitt 60 min", `${fmt1(r.speed60)} km/h`);
   const fr = analyzer.free();
   if (fr.startT != null) {
     const h = (fr.t - fr.startT) / 3600000;
-    add("Frei ab", `${clockText(fr.startT)} (${fr.src})`);
-    add("Strecke frei", `${fmtKmT(fr.km)} km über 6 Schenkel`);
-    if (h > 1 / 60) add("Schnitt frei", `${fmt1(fr.km / h)} km/h`);
-  } else add("Frei", fr.src);
+    add("OLC ab", `${clockText(fr.startT)} (${fr.src})`);
+    add("OLC-Strecke", `${fmtKmT(fr.km)} km über 6 Schenkel`);
+    if (h > 1 / 60) add("Schnitt OLC", `${fmt1(fr.km / h)} km/h`);
+    const v60 = analyzer.freeSpeed60();
+    if (v60 != null) add("OLC 60 min", `${fmt1(v60)} km/h`);
+  } else add("OLC", fr.src);
+  const fw = analyzer.flown();
+  if (fw) add("Weg geflogen", `${fmtKmT(fw.km)} km` + (fw.speed60 != null ? ` (60 min: ${fmt1(fw.speed60)} km/h)` : ""));
+  const w60 = analyzer.wind60();
+  if (w60) add("Wind Ø 60 min", `${windText(w60)} km/h`);
   const w = analyzer.wind;
-  add("Wind", w ? `${windText(w)} km/h (geschätzt ${clockText(w.t)})` : "noch nicht geschätzt");
+  add("Wind", w ? `${windText(w)} km/h (${w.logger ? "vom Logger" : `geschätzt ${clockText(w.t)}`})` : "noch nicht geschätzt");
   avgDlg.showModal();
 }
-document.getElementById("d-avg-box").addEventListener("click", showAvg);
+for (const id of ["d-wind-box", "d-dist-box", "d-olc-box", "d-olcv-box", "d-task-box", "d-taskv-box"]) document.getElementById(id).addEventListener("click", showAvg);
 document.getElementById("avg-now").addEventListener("click", () => {
   if (!last) { showToast("Noch keine Position."); return; }
   analyzer.setManualStart(fixLog.at(-1)?.t ?? last.time);
@@ -827,6 +885,7 @@ document.getElementById("open-settings").addEventListener("click", () => {
   for (const cb of asCatsEl.querySelectorAll("input")) cb.checked = settings.asWarnCats.includes(cb.value);
   polarIn.value = settings.polar;
   stfToneIn.checked = settings.stfTone;
+  igcAirIn.checked = settings.igcAir;
   showPolarInfo();
   showWpInfo();
   volumeIn.value = settings.volume;
@@ -1124,7 +1183,8 @@ function startReplay(flight, name) {
   const h = Math.round((flight.fixes.at(-1).t - flight.fixes[flight.takeoffIndex].t) / 60000);
   showToast(`Flug „${name}“ geladen (${Math.floor(h / 60)}:${String(h % 60).padStart(2, "0")} h). ` +
     (field ? `Höhe auf ${field.name} (${Math.round(field.elev)} m) abgeglichen.` : `${flight.altSource}-Höhe aus der Datei, ohne Abgleich.`) +
-    (flight.task ? ` Aufgabe aus der Datei: ${flight.task.points.length - 2} Wenden, ${Math.round(flight.task.distanceKm)} km.` : ""));
+    (flight.task ? ` Aufgabe aus der Datei: ${flight.task.points.length - 2} Wenden, ${Math.round(flight.task.distanceKm)} km.` : "") +
+    (settings.igcAir && (flight.loggerAir || flight.loggerWind) ? ` ${[flight.loggerAir && "Fahrt", flight.loggerWind && "Wind"].filter(Boolean).join(" und ")} vom Logger.` : ""));
 }
 
 function stopReplay() {

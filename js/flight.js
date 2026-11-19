@@ -103,6 +103,7 @@ export function createFlightAnalyzer() {
       enlSeen: false, engineOnSince: null, engineRan: false, engineOffT: null,
       launchT: null, launchSrc: null, manualT: null, glide: [],
       trace: [], traceStep: 10000, olc: null,
+      cum: 0, hist: [], free60: null,
     };
   }
   reset();
@@ -126,6 +127,12 @@ export function createFlightAnalyzer() {
       }
     } else s.since = null;
 
+    // Wind vom Logger (beim Abspielen einer IGC-Datei mit Windaufzeichnung)
+    if (useLogger && f.wind) {
+      const r = toRad(f.wind.from), v = f.wind.kmh / KMH;
+      s.wind = { e: -v * Math.sin(r), n: -v * Math.cos(r), t: f.t, circles: 0, logger: true };
+      return;
+    }
     updateWind(f, dt);
   }
 
@@ -164,16 +171,19 @@ export function createFlightAnalyzer() {
     let ve = 0, vn = 0;
     if (f.track != null) { ve = gs * Math.sin(toRad(f.track)); vn = gs * Math.cos(toRad(f.track)); }
     const w = s.wind && f.t - s.wind.t < WIND_STALE_MIN * 60000 ? s.wind : null;
-    const tas = w && f.track != null ? Math.hypot(ve - w.e, vn - w.n) : gs;
+    // Fahrt vom Logger, wenn vorhanden (Fahrtmesser am Logger), sonst aus GPS und Wind
+    const logTas = useLogger && f.tas != null ? f.tas / KMH : null;
+    s.loggerAir = logTas != null;
+    const tas = logTas ?? (w && f.track != null ? Math.hypot(ve - w.e, vn - w.n) : gs);
     s.tas = tas * KMH;
-    s.ias = f.alt == null ? s.tas : iasFromTas(tas, f.alt) * KMH;
+    s.ias = useLogger && f.ias != null ? f.ias : f.alt == null ? s.tas : iasFromTas(tas, f.alt) * KMH;
     // Netto erst mit bekanntem Wind, sonst wäre die Fahrt durch die Luft falsch
     if (f.alt == null) { s.netto = null; return; }
     s.energy.push({ t: f.t, v: f.alt + (tas * tas) / (2 * G) });
     while (s.energy.length && s.energy[0].t < f.t - 6000) s.energy.shift();
     const te = slope(s.energy);
     const ias = s.ias / KMH;
-    s.netto = w && te != null && polar && ias > 15 && ias < 90 ? te + polar.sink(ias) : null;
+    s.netto = (w || s.loggerAir) && te != null && polar && ias > 15 && ias < 90 ? te + polar.sink(ias) : null;
   }
 
   // Abheben, Motor/Schlepp-Ende („Ausklinken“) erkennen
@@ -213,6 +223,25 @@ export function createFlightAnalyzer() {
 
   function startT() { return s.manualT ?? s.launchT; }
 
+  // geflogene Strecke ab Abheben und Verlauf alle 10 s für die 60-Minuten-Mittel
+  function updateHistory(f) {
+    if (!s.airborne) return;
+    const v = vec(f.lat, f.lon);
+    if (s.prev && s.prev.t >= s.takeoffT) s.cum += chordKm(vec(s.prev.lat, s.prev.lon), v);
+    const last = s.hist.at(-1);
+    if (last && f.t - last.t < 10000) return;
+    const w = s.wind && f.t - s.wind.t < WIND_STALE_MIN * 60000 ? s.wind : null;
+    s.hist.push({ t: f.t, cum: s.cum, v, we: w?.e, wn: w?.n });
+    while (s.hist.length && s.hist[0].t < f.t - 61 * 60000) s.hist.shift();
+    s.free60 = null;
+  }
+  const HOUR = 3600000;
+  // Verlaufspunkt von vor 60 min (nur wenn der Verlauf so weit reicht)
+  function hourAgo(now) {
+    const h = s.hist[0];
+    return h && now - h.t >= HOUR - 15000 ? s.hist.find((x) => x.t >= now - HOUR) : null;
+  }
+
   function updateTrace(f) {
     const t0 = startT();
     if (t0 == null || f.t < t0) return;
@@ -224,8 +253,11 @@ export function createFlightAnalyzer() {
     if (s.trace.length > 500) { s.trace = s.trace.filter((_, i) => i % 2 === 0); s.traceStep *= 2; }
   }
 
+  let useLogger = true;
   return {
     reset,
+    // Fahrt und Wind aus der IGC-Datei verwenden, wenn die Punkte sie mitbringen
+    setUseLogger(on) { useLogger = on; },
     // f: { t, lat, lon, alt, speedKmh, track, enl? }
     process(f, polar) {
       if (f.lat == null || f.t == null) return;
@@ -235,6 +267,7 @@ export function createFlightAnalyzer() {
       updateAir(f, polar);
       updateLaunch(f, dt);
       updateTrace(f);
+      updateHistory(f);
       s.prev = f;
     },
     // Start des Schnitts ohne Aufgabe von Hand auf „jetzt“ setzen (null = wieder automatisch)
@@ -248,10 +281,36 @@ export function createFlightAnalyzer() {
       const w = s.wind;
       if (!w || !s.prev || s.prev.t - w.t > WIND_STALE_MIN * 60000) return null;
       const spd = Math.hypot(w.e, w.n);
-      return { e: w.e, n: w.n, speed: spd, from: (Math.atan2(-w.e, -w.n) * 180 / Math.PI + 360) % 360, t: w.t, circles: w.circles };
+      return { e: w.e, n: w.n, speed: spd, from: (Math.atan2(-w.e, -w.n) * 180 / Math.PI + 360) % 360, t: w.t, circles: w.circles, logger: !!w.logger };
     },
-    get airspeed() { return { tas: s.tas, ias: s.ias, gs: s.gs, fromWind: !!this.wind }; },
+    get airspeed() { return { tas: s.tas, ias: s.ias, gs: s.gs, fromWind: !!this.wind || !!s.loggerAir, logger: !!s.loggerAir }; },
     get netto() { return s.netto; },
+    // geflogene Strecke seit dem Abheben, dazu Schnitt der letzten 60 min entlang der Spur
+    flown() {
+      if (!s.airborne || !s.prev) return null;
+      const h = hourAgo(s.prev.t);
+      return { km: s.cum, speed60: h ? s.cum - h.cum : null };
+    },
+    // Wind im Mittel der letzten 60 min (Vektormittel der bekannten Werte)
+    wind60() {
+      if (!s.prev) return null;
+      let e = 0, n = 0, k = 0;
+      for (const x of s.hist) if (x.t >= s.prev.t - HOUR && x.we != null) { e += x.we; n += x.wn; k++; }
+      if (k < 3) return null;
+      e /= k; n /= k;
+      return { speed: Math.hypot(e, n), from: (Math.atan2(-e, -n) * 180 / Math.PI + 360) % 360 };
+    },
+    // freie Strecke über 6 Schenkel innerhalb der letzten 60 min, als km/h
+    freeSpeed60() {
+      const t0 = startT();
+      if (t0 == null || !s.prev || s.prev.t - t0 < HOUR - 15000 || !hourAgo(s.prev.t)) return null;
+      if (s.free60 == null) {
+        const pts = s.hist.filter((x) => x.t >= s.prev.t - HOUR && x.t >= t0);
+        s.free60 = pts.length ? bestLegs(pts, 6) : [];
+        s.free60pts = pts;
+      }
+      return s.free60pts.length ? lastLeg(s.free60pts, s.free60, vec(s.prev.lat, s.prev.lon)) : null;
+    },
     // freier Flug: Start und Strecke (6 Schenkel) bis jetzt
     free() {
       const t0 = startT();

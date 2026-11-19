@@ -31,11 +31,12 @@ export function createTaskTracker() {
   let task = null, s = null;
 
   function reset() {
-    s = { prev: null, startT: null, next: 1, ach: [], inside: false, finishT: null, pos: null };
+    s = { prev: null, startT: null, next: 1, ach: [], inside: false, finishT: null, pos: null, hist: [] };
   }
   reset();
 
   function onStart(f) {
+    s.hist = [];
     s.startT = f.t;
     s.next = 1;
     s.ach = [task.points[0]];
@@ -60,6 +61,11 @@ export function createTaskTracker() {
     s.prev = f;
     s.pos = f;
     if (!prev || s.finishT != null) return;
+    // geflogene Aufgabenstrecke alle 10 s merken, für den Schnitt der letzten 60 min
+    if (s.startT != null && (!s.hist.length || f.t - s.hist.at(-1).t >= 10000)) {
+      s.hist.push({ t: f.t, km: flownKm(f) });
+      while (s.hist.length && s.hist[0].t < f.t - 61 * 60000) s.hist.shift();
+    }
 
     // Abflug, auch erneut (dann zählt der letzte), aber nur bis zur ersten Wende
     const st = pts[0], legBrg = bearing(st, pts[1]);
@@ -94,6 +100,13 @@ export function createTaskTracker() {
     }
   }
 
+  // Schnitt der letzten 60 min: Zuwachs der Aufgabenstrecke in einer Stunde
+  function speed60(end, km) {
+    if (end - s.startT < 3600000 - 15000) return null;
+    const h = s.hist.find((x) => x.t >= end - 3600000);
+    return h ? (km - h.km) / ((end - h.t) / 3600000) : null;
+  }
+
   return {
     setTask(t) { task = t && t.points?.length >= 2 ? t : null; reset(); },
     get task() { return task; },
@@ -109,6 +122,7 @@ export function createTaskTracker() {
         state: s.finishT != null ? "done" : "run",
         startT: s.startT, finishT: s.finishT, km,
         next: s.next, speedKmh: h > 1 / 60 ? km / h : null,
+        speed60: speed60(end, km),
       };
     },
   };

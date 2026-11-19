@@ -209,25 +209,36 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
   font-size: 1.5rem; min-width: 48px; min-height: 48px; border-radius: 50%;
   background: var(--accent); color: #111; box-shadow: 0 2px 8px rgb(0 0 0 / .35);
 }
-/* Digitale Anzeigen: erste Zeile über dem Endanflug. Auf der Instrumentenseite nur Sollfahrt und Schnitt. */
+/* Digitale Anzeigen: oben über dem Endanflug. Auf der Instrumentenseite nur Sollfahrt, Wind und Schnitt. */
 .digi { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .digi-c { background: var(--face); border: 1px solid var(--bezel); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 0; }
 button.digi-c { font: inherit; color: inherit; text-align: left; min-height: 0; cursor: pointer; }
-.digi-n { font-family: var(--font-num); font-size: .78rem; color: var(--muted); white-space: nowrap; display: flex; align-items: baseline; gap: 4px; }
+.digi-c .fg-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.digi-n { font-family: var(--font-num); font-size: .78rem; color: var(--muted); white-space: nowrap; display: flex; align-items: baseline; gap: 4px; overflow: hidden; }
 .digi-n b { font-size: 1.9rem; color: var(--ink); line-height: 1.1; }
+.digi-n .u { font-size: inherit; }
 .digi-s { font-family: var(--font-num); font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stf-cmd { font-style: normal; font-weight: 700; font-size: 1.05rem; color: var(--accent); margin-left: auto; }
 .stf-cmd[data-dir="push"] { color: var(--blue); }
-body:not(.map-page) .digi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-body:not(.map-page) .d-full { display: none; }
+.wind-arr { font-style: normal; font-weight: 700; font-size: 1.2rem; color: var(--accent); display: inline-block; align-self: center; transition: transform .6s ease-out; }
+.wind-arr[data-off] { opacity: .2; }
+body:not(.has-task) .d-task { display: none; }
+body:not(.map-page) .digi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body:not(.map-page) .digi > * { display: none; }
+body:not(.map-page) .d-stf, body:not(.map-page) .d-windt,
+body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-taskv { display: flex; }
 @media (max-width: 700px) {
-  body.map-page .digi { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  body.map-page .d-full { grid-column: span 2; }
-  body.map-page .d-stf, body.map-page .d-avgspd { grid-column: span 3; }
-  .digi-c { padding: 4px 8px; }
-  .digi-n b { font-size: 1.55rem; }
+  body.map-page .digi { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  body.map-page .d-task { grid-column: span 2; }
+  .digi-c { padding: 3px 6px; border-radius: 8px; }
+  .digi-c .fg-k { font-size: .56rem; letter-spacing: .04em; }
+  .digi-n { font-size: .66rem; gap: 2px; }
+  .digi-n b { font-size: 1.3rem; }
+  .digi-s { font-size: .62rem; }
+  .stf-cmd { font-size: .85rem; }
 }
-@media (max-width: 400px) { .digi-n b { font-size: 1.35rem; } }
+@media (max-width: 440px) { .digi-n .u { display: none; } }
+@media (max-width: 400px) { .digi-n b { font-size: 1.15rem; } .digi-s { font-size: .58rem; } }
 body.stale .digi-n b { color: var(--red); }
 
 /* Flugzeugsymbol */

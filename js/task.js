@@ -178,10 +178,13 @@ export function parseIgcTask(text) {
   pts = pts.filter((p) => p.lat || p.lon);
   if (pts.length < 2) return null;
 
+  // Manche Logger schreiben die Erklärung mehrfach in die Datei: je Nummer nur die erste Zone
   const zones = [];
+  const seen = new Set();
   for (const l of lines) {
     const m = /^L(?:LXV|SEEYOU )OZ=(-?\d+),(.*)$/.exec(l);
-    if (!m) continue;
+    if (!m || seen.has(m[1])) continue;
+    seen.add(m[1]);
     const o = {};
     for (const kv of m[2].split(",")) {
       const [k, v] = kv.split("=");

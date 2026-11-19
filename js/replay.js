@@ -22,7 +22,7 @@ export function createReplay({ flight, altOffset, els, onData }) {
   };
 
   // ein Punkt der Aufzeichnung so, wie ihn die Flugauswertung braucht
-  const fixData = (x) => ({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + altOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl });
+  const fixData = (x) => ({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + altOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl, tas: x.tas, ias: x.ias, wind: x.wind });
 
   function emit() {
     const f = fixAt(flight, t);

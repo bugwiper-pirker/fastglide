@@ -4,7 +4,10 @@
 //   HFPLTPILOTINCHARGE:Name      Pilot, ebenso GTY (Muster), GID (Kennzeichen), CID (Wettbewerbskennzeichen)
 //   HFTZNTIMEZONE:2.0            Zeitzone des Loggers (optional)
 //   B 103031 4621138N 01410716E A 00463 00546 …
-//   I-Satz: Zusatzfelder im B-Satz, verwendet wird ENL (Motorgeräusch) bzw. MOP (Motorstrom)
+//   I-Satz: Zusatzfelder im B-Satz, verwendet werden ENL (Motorgeräusch) bzw. MOP (Motorstrom),
+//           TAS und IAS (Fahrt durch die Luft, falls der Logger einen Fahrtmesser hat)
+//   J-Satz: Felder der K-Sätze, verwendet werden WDI (Windrichtung, woher) und WVE/WSP (Windgeschwindigkeit)
+//   Fünfstellige Fahrten/Windgeschwindigkeiten (LXNAV) sind in km/h · 100, kürzere in km/h.
 //     Zeit (UTC), Breite (GGMMmmm), Länge (GGGMMmmm), A = 3D-Fix, Druckhöhe, GPS-Höhe (m)
 
 import { distanceKm } from "./waypoints.js";
@@ -19,12 +22,27 @@ export function parseIgc(text) {
   let date = null;
   const fixes = [];
   let dayOffset = 0, lastSec = -1;
-  let enlAt = null; // Motorgeräusch (ENL) bzw. Motorstrom (MOP) aus dem I-Satz: Spalten im B-Satz
+  let bExt = null, kExt = null; // Spalten der Zusatzfelder in B- und K-Sätzen
+  const winds = [];
+  // Zusatzfeld lesen: Zahl, bei Fahrt/Wind fünfstellig in km/h · 100
+  const field = (l, at, speed) => {
+    if (!at || l.length < at[1]) return null;
+    const v = Number(l.slice(at[0], at[1]));
+    if (!Number.isFinite(v)) return null;
+    return speed && at[1] - at[0] >= 5 ? v / 100 : v;
+  };
+  const extOf = (l) => {
+    const ext = {};
+    for (let k = 3; k + 7 <= l.length; k += 7) ext[l.slice(k + 4, k + 7)] = [Number(l.slice(k, k + 2)) - 1, Number(l.slice(k + 2, k + 4))];
+    return ext;
+  };
   for (const l of lines) {
-    if (l.startsWith("I") && !enlAt) {
-      const ext = {};
-      for (let k = 3; k + 7 <= l.length; k += 7) ext[l.slice(k + 4, k + 7)] = [Number(l.slice(k, k + 2)) - 1, Number(l.slice(k + 2, k + 4))];
-      enlAt = ext.ENL || ext.MOP || null;
+    if (l.startsWith("I") && !bExt) bExt = extOf(l);
+    else if (l.startsWith("J") && !kExt) kExt = extOf(l);
+    else if (l.startsWith("K") && kExt?.WDI && (kExt?.WVE || kExt?.WSP) && /^K\d{6}/.test(l)) {
+      const sec = Number(l.slice(1, 3)) * 3600 + Number(l.slice(3, 5)) * 60 + Number(l.slice(5, 7));
+      const from = field(l, kExt.WDI, false), kmh = field(l, kExt.WVE || kExt.WSP, true);
+      if (from != null && kmh != null) winds.push({ sec: sec + dayOffset + (sec < lastSec - 3600 ? 86400 : 0), from, kmh });
     } else if (l.startsWith("H")) {
       const key = l.slice(2, 5).toUpperCase();
       const val = l.includes(":") ? l.slice(l.indexOf(":") + 1).trim() : l.slice(5).trim();
@@ -41,11 +59,26 @@ export function parseIgc(text) {
       const lat = (Number(m[4]) + Number(m[5]) / 60000) * (m[6] === "S" ? -1 : 1);
       const lon = (Number(m[7]) + Number(m[8]) / 60000) * (m[9] === "W" ? -1 : 1);
       if (!lat && !lon) continue;
-      const enl = enlAt && l.length >= enlAt[1] ? Number(l.slice(enlAt[0], enlAt[1])) : null;
-      fixes.push({ t: (date ?? 0) + (sec + dayOffset) * 1000, lat, lon, baro: Number(m[11]), gps: Number(m[12]), valid: m[10] === "A", enl: Number.isFinite(enl) ? enl : null });
+      const tas = field(l, bExt?.TAS, true), ias = field(l, bExt?.IAS, true);
+      fixes.push({
+        t: (date ?? 0) + (sec + dayOffset) * 1000, lat, lon, baro: Number(m[11]), gps: Number(m[12]), valid: m[10] === "A",
+        enl: field(l, bExt?.ENL || bExt?.MOP, false), tas: tas > 0 ? tas : null, ias: ias > 0 ? ias : null,
+      });
     }
   }
   if (fixes.length < 10) throw new Error("In der IGC-Datei wurden zu wenige Positionen gefunden.");
+
+  // Wind vom Logger an jeden Punkt hängen (letzter Wert bis dahin, höchstens 2 min alt)
+  if (winds.length) {
+    let k = -1;
+    for (const f of fixes) {
+      const sec = (f.t - (date ?? 0)) / 1000;
+      while (k + 1 < winds.length && winds[k + 1].sec <= sec) k++;
+      if (k >= 0 && sec - winds[k].sec <= 120) f.wind = { from: winds[k].from, kmh: winds[k].kmh };
+    }
+  }
+  const hasTas = fixes.filter((f) => f.tas != null).length > fixes.length * 0.5;
+  if (!hasTas) for (const f of fixes) f.tas = f.ias = null;
 
   // Höhe: GPS-Höhe wie beim Handy, ohne gültige GPS-Höhe die Druckhöhe
   const useGps = fixes.filter((f) => f.gps !== 0).length > fixes.length * 0.8;
@@ -86,6 +119,7 @@ export function parseIgc(text) {
     pilot: head.PLT || head.CM2 || "", glider: [head.GTY, head.GID].filter(Boolean).join(" "), cid: head.CID || "",
     date, tzHours: Number.isFinite(tz) && head.TZN ? tz : null,
     altSource: useGps ? "GPS" : "Druck",
+    loggerAir: hasTas, loggerWind: winds.length > 0,
     fixes, takeoffIndex: takeoff, task,
   };
 }
