@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "glidewise-v21";
+const VERSION = "glidewise-v22";
 const FILES = [
   "./",
   "index.html",

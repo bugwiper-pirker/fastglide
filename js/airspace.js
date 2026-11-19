@@ -323,9 +323,11 @@ export function checkAirspace(spaces, pos, opts) {
   return out;
 }
 
-// Grenze mit Meterangabe: "3500 ft MSL (1067 m)", "FL 95 (2896 m)". Angaben in m bleiben, wie sie sind.
+// Grenze kompakt mit Meterangabe: "3500ft MSL (1067m)", "FL95 (2896m)", "1000ft AGL (305m AGL)".
+// Angaben in m bleiben ohne Umrechnung ("1500m MSL").
 export function limitText(x) {
-  if (!Number.isFinite(x.m) || x.ref === "GND" || / m /.test(` ${x.text} `)) return x.text;
-  return `${x.text} (${Math.round(x.m).toLocaleString("de-AT")} m${x.ref === "AGL" ? " AGL" : ""})`;
+  const t = x.text.replace(/(\d) (ft|m)\b/, "$1$2").replace(/^FL /, "FL");
+  if (!Number.isFinite(x.m) || x.ref === "GND" || /\dm\b/.test(t)) return t;
+  return `${t} (${Math.round(x.m)}m${x.ref === "AGL" ? " AGL" : ""})`;
 }
 export const altText = (a) => `${limitText(a.lower)} – ${limitText(a.upper)}`;

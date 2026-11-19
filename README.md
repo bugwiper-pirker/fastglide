@@ -31,6 +31,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
   - Höhenangaben in ft und FL stehen auch in Metern dabei, z. B. „3500 ft MSL (1 067 m)“ oder „FL 95 (2 896 m)“.
   - Karte: Ränder nach Kategorie gefärbt. CTR rot, C dunkelblau, D blau, R rot, P dunkelrot, Q orange gestrichelt, TMZ violett gestrichelt, RMZ grün gestrichelt, TRA türkis gestrichelt. Tippen auf die Karte zeigt alle Lufträume an dieser Stelle mit Name, Untergrenze, Obergrenze, Kategorie und Frequenz.
   - Die Austro-Control-Datei führt RMZ und TMZ als Klasse R und TRAs als Klasse W. Die App ordnet sie deshalb nach dem Namen zu (RMZ, TMZ, TRA, CTR, LOR, LOD, LOP).
+  - Höhen kompakt, z. B. „9501ft MSL (2896m) – 19501ft MSL (5944m)“. Abstände unter 1 km stehen in Metern (auf 10 m gerundet).
   - Warnung (Banner, Ton, Vibration) bei Lufträumen, die für VFR ohne Freigabe nicht erlaubt sind. Standard sind A, B, C, D, CTR, R, P, die Liste ist in ⚙ einstellbar. „Nähert sich“ heißt: seitlich näher als der Warnabstand (Standard 2 km) oder in 60 s laut Kurs drin, und dabei höchstens 150 m über oder unter den Grenzen. „Im Luftraum“ gibt eine rote, pulsierende Warnung und wiederholt den Ton alle 30 s.
   - Tippen auf die Warnung schaltet sie 5 Minuten stumm. „Nicht mehr warnen“ setzt einen Luftraum dauerhaft auf die Ausnahmeliste, z. B. die MATZ am Heimatplatz. Rückgängig geht das in ⚙ oder im Popup auf der Karte.
   - Optional „TRAs als aktiv behandeln“: In einer TRA gibt es keine C/D-Warnung.

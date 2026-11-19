@@ -2,7 +2,7 @@
 // Verwendet Leaflet (vendor/leaflet) als globales L.
 
 import { LANDABLE } from "./waypoints.js";
-import { CATEGORIES, airspacesAt, limitText } from "./airspace.js";
+import { CATEGORIES, airspacesAt, altText } from "./airspace.js";
 import { zoneShapes, zoneText } from "./task.js";
 
 export const MAP_SOURCES = {
@@ -155,7 +155,7 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
       name.textContent = a.name || "(ohne Namen)";
       const alt = document.createElement("div");
       alt.className = "as-alt";
-      alt.textContent = `von ${limitText(a.lower)} bis ${limitText(a.upper)}`;
+      alt.textContent = altText(a);
       const meta = document.createElement("div");
       meta.className = "as-meta";
       meta.textContent = [cat.label + (a.ac && !/^[A-G]$/.test(a.cat) && /^[A-G]$/i.test(a.ac) ? ` · Klasse ${a.ac}` : ""),

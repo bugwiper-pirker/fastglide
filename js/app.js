@@ -242,7 +242,8 @@ const acked = new Map();     // Luftraum -> bestätigt bis (ms)
 const ACK_MS = 5 * 60 * 1000;
 let currentWarnings = [];
 
-const fmtKm = (km) => (km < 10 ? km.toFixed(1).replace(".", ",") : Math.round(km)) + " km";
+// unter 1 km in Metern (auf 10 m gerundet), sonst km
+const fmtKm = (km) => (km < 0.995 ? `${Math.round(km * 100) * 10} m` : (km < 10 ? km.toFixed(1).replace(".", ",") : Math.round(km)) + " km");
 
 // Lufträume, die laut Aufgabe inaktiv sind. Gilt nur am Tag der Aufgabe.
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
