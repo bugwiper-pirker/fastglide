@@ -168,6 +168,17 @@ input[type="search"] { font: inherit; font-size: 1.05rem; padding: 10px 12px; bo
 .wp-empty { color: var(--muted); padding: 10px; }
 input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
 
+/* Flug abspielen */
+.replay { background: var(--face); border: 1px solid var(--bezel); border-radius: 10px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.rp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rp-row button { min-width: 40px; min-height: 36px; padding: 2px 8px; }
+#rp-play { color: var(--accent); font-size: 1.1rem; }
+.rp-row select { padding: 6px; font-family: var(--font-num); }
+.rp-time { font-family: var(--font-num); font-size: 1.1rem; white-space: nowrap; }
+.rp-title { flex: 1; min-width: 0; font-size: .75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-baro { width: 100%; height: 64px; display: block; touch-action: none; cursor: pointer; }
+@media (max-width: 480px) { .rp-title { display: none; } .rp-row { justify-content: space-between; } }
+
 /* Aufgaben-Info */
 .task-dlg { max-height: 90vh; }
 .task-dlg h2:focus { outline: none; }

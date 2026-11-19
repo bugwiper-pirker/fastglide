@@ -68,6 +68,19 @@
         <div class="digi-c"><span class="fg-k">Vario</span><span class="digi-n"><b id="d-var">---</b> m/s</span><span class="digi-s" id="d-avg">Ø ---</span></div>
       </div>
     </section>
+
+    <section id="replay" class="replay" hidden aria-label="Flug abspielen">
+      <div class="rp-row">
+        <button type="button" id="rp-play" aria-label="Abspielen">▶</button>
+        <button type="button" id="rp-back" aria-label="Zurück">⏪</button>
+        <button type="button" id="rp-fwd" aria-label="Vor">⏩</button>
+        <select id="rp-speed" aria-label="Geschwindigkeit"></select>
+        <b id="rp-time" class="rp-time">--:--:--</b>
+        <span id="rp-title" class="rp-title"></span>
+        <button type="button" id="rp-close" aria-label="Abspielen beenden">✕</button>
+      </div>
+      <canvas id="rp-baro" class="rp-baro" aria-label="Barogramm, tippen oder ziehen zum Springen"></canvas>
+    </section>
   </div>
 
   <div id="toast" class="toast" role="status" hidden></div>
@@ -234,6 +247,16 @@
         </label>
         <p class="hint">Die Karte braucht Internet. Angesehene Kartenteile werden gespeichert und sind danach auch ohne Empfang sichtbar.</p>
         <button type="button" id="fullscreen">Vollbild ein/aus</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Flug abspielen (IGC)</legend>
+        <p class="hint">Einen aufgezeichneten Flug nachfliegen: Instrumente, Endanflug, Aufgabe und Luftraumwarnung laufen mit, als käme die Position vom GPS. Unten erscheint die Zeitachse mit Barogramm.</p>
+        <label>IGC-Datei laden
+          <input id="igc-file" type="file" accept=".igc,.IGC">
+        </label>
+        <button type="button" id="igc-demo">Beispielflug abspielen</button>
+        <p class="hint" id="igc-demo-info"></p>
       </fieldset>
 
       <fieldset>

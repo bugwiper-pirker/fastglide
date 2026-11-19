@@ -31,6 +31,13 @@ export const DEFAULT_AIRSPACE = {
 // Soaring Spot erlaubt keinen direkten Abruf aus dem Browser. Leer = Links von Soaring Spot gehen nicht.
 export const SOARINGSPOT_PROXY = "https://glidewise-soaringspot.gliderpilotmp.workers.dev";
 
+// Beispielflug zum Abspielen, wenn man keine eigene IGC-Datei hat
+export const DEMO_FLIGHT = {
+  url: "data/beispielflug_2025-07-06.igc",
+  name: "Beispielflug 06.07.2025",
+  label: "Arcus M D-KRPK, Lesce, 6. Juli 2025",
+};
+
 export const ALTIMETER = {
   max: 10000, // m
 };

@@ -247,6 +247,7 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
   const trackLine = L.polyline([], { color: "#f2b84b", weight: 3, opacity: 0.9, interactive: false });
 
   let pos = null;
+  let flightLine = null;
   let follow = true;
   let firstFix = true;
 
@@ -308,6 +309,18 @@ export function createMapView({ container, recenterBtn, onPickTarget, getSource,
         drawTask();
       }
     },
+    // aufgezeichneter Flug (IGC)
+    setFlight(latlngs) {
+      if (flightLine) { map.removeLayer(flightLine); flightLine = null; }
+      if (!latlngs) return;
+      flightLine = L.polyline(latlngs, { color: "#1b1f24", weight: 2, opacity: 0.7, interactive: false }).addTo(map);
+    },
+    fitFlight() {
+      if (!flightLine) return;
+      map.stop();
+      map.fitBounds(flightLine.getBounds(), { padding: [30, 30], animate: false });
+    },
+    follow() { firstFix = true; setFollow(true); },
     fitTask() {
       if (!task) return;
       firstFix = false; // erste GPS-Position soll die Übersicht nicht überschreiben

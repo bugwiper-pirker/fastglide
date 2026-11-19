@@ -1,13 +1,15 @@
-import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE, SOARINGSPOT_PROXY } from "./config.js";
+import { AIRCRAFT, ALTIMETER, VARIO, DEFAULT_WAYPOINTS, DEFAULT_AIRSPACE, SOARINGSPOT_PROXY, DEMO_FLIGHT } from "./config.js";
 import { createAirspeed } from "./instruments/airspeed.js";
 import { createAltimeter, ftText, flText } from "./instruments/altimeter.js";
 import { createVario } from "./instruments/vario.js";
 import { createClimbCalculator } from "./climb.js";
 import { createVarioAudio } from "./audio.js";
 import { createFinalGlide } from "./finalglide.js";
-import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup, distanceKm } from "./waypoints.js";
+import { readWaypointFile, fetchDefaultWaypoints, saveWaypoints, loadWaypoints, clearWaypoints, cupTextFromBuffer, parseCup, distanceKm, LANDABLE } from "./waypoints.js";
 import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soaringSpotTaskUrl, zoneText } from "./task.js";
 import { startGps, startSimulation } from "./sources.js";
+import { isIgc, parseIgc } from "./igc.js";
+import { createReplay } from "./replay.js";
 import { createMapView } from "./map.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey, findByNames } from "./airspace.js";
 
@@ -79,6 +81,7 @@ function ensureMap() {
   mapView.setLayerVisible("task", settings.showTask);
   mapView.setPoints(waypoints);
   mapView.setTarget(settings.target);
+  if (replayFlight) mapView.setFlight(replayFlight.fixes.map((f) => [f.lat, f.lon]));
   if (lastPos) mapView.update(lastPos);
   return mapView;
 }
@@ -118,10 +121,14 @@ const statusText = document.getElementById("status-text");
 function onData(d) {
   last = d;
   lastTime = Date.now();
+  // Flug abspielen: nach einem Sprung neu anfangen, Zwischenpunkte fürs Vario einrechnen
+  if (d.reset) climb.reset();
+  for (const s of d.samples || []) climb.add(s.t, s.alt, settings.varioWindow);
   const c = climb.add(d.time, d.altitude, settings.varioWindow);
   const data = {
     speedKmh: d.speedKmh,
-    altitude: d.altitude == null ? null : d.altitude + settings.altOffset,
+    // die Höhe aus der IGC-Datei ist schon auf die Platzhöhe abgeglichen
+    altitude: d.altitude == null ? null : d.altitude + (d.replay ? 0 : settings.altOffset),
     vario: c.vario,
     varioAvg: c.avg,
   };
@@ -137,7 +144,7 @@ function onData(d) {
   fg.update(pos);
   if (pos) { lastPos = pos; mapView?.update(pos); }
   updateAirspaceWarnings(pos ? { ...pos, speedKmh: d.speedKmh } : null);
-  setStatus("ok", settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
+  setStatus("ok", d.replay ? `FLUG ${replay?.speed ?? ""}×` : settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
 
 function onError(msg, code) {
@@ -152,6 +159,7 @@ function setStatus(state, text) {
 
 let stopSource = null;
 function startSource() {
+  stopReplay();
   if (stopSource) stopSource();
   last = null;
   climb.reset();
@@ -719,6 +727,10 @@ function useTask(fileName, t) {
 // Beliebige Datei erkennen: Aufgabe, Wendepunkte oder Lufträume
 async function importAnyFile(buf, name) {
   const text = await cupTextFromBuffer(buf);
+  if (/\.igc$/i.test(name) || isIgc(text)) {
+    startReplay(parseIgc(text), name);
+    return;
+  }
   if (/\.tsk$/i.test(name) || text.trimStart().startsWith("<") || /-+\s*related tasks/i.test(text) || isSoaringSpotPage(text)) {
     useTask(name, await readTaskBuffer(buf, name, waypoints));
     return;
@@ -785,6 +797,81 @@ async function loadTaskUrl(url) {
   }
 }
 document.getElementById("task-url-load").addEventListener("click", () => loadTaskUrl(taskUrl.value.trim()));
+
+// ---------- Flug abspielen (IGC) ----------
+let replay = null, replayFlight = null;
+const replayEl = document.getElementById("replay");
+const rpEls = {
+  play: document.getElementById("rp-play"), back: document.getElementById("rp-back"), fwd: document.getElementById("rp-fwd"),
+  speed: document.getElementById("rp-speed"), time: document.getElementById("rp-time"), title: document.getElementById("rp-title"),
+  baro: document.getElementById("rp-baro"),
+};
+
+// Höhe wie beim Kalibrieren am Boden: vor dem Abflug auf die Höhe des nächsten Landeplatzes (bis 3 km) setzen
+function replayAltOffset(flight) {
+  const ground = flight.fixes.slice(0, Math.max(1, flight.takeoffIndex)).map((f) => f.alt).sort((a, b) => a - b);
+  const groundAlt = ground[Math.floor(ground.length / 2)];
+  const f0 = flight.fixes[flight.takeoffIndex];
+  let best = null, bestKm = 3;
+  for (const w of waypoints) {
+    if (w.elev == null || !LANDABLE.has(w.style)) continue;
+    const km = distanceKm(f0.lat, f0.lon, w.lat, w.lon);
+    if (km < bestKm) { best = w; bestKm = km; }
+  }
+  return best ? { offset: best.elev - groundAlt, field: best } : { offset: 0, field: null };
+}
+
+function startReplay(flight, name) {
+  stopReplay();
+  if (stopSource) stopSource();
+  stopSource = null;
+  last = null;
+  climb.reset();
+  for (const i of instruments) { i.target = null; i.extraVal = null; }
+  const { offset, field } = replayAltOffset(flight);
+  replayFlight = flight;
+  replayEl.hidden = false;
+  if (dlg.open) dlg.close();
+  showPage("map");
+  mapView?.setFlight(flight.fixes.map((f) => [f.lat, f.lon]));
+  mapView?.follow();
+  replay = createReplay({ flight, altOffset: offset, els: rpEls, onData });
+  replay.play();
+  const h = Math.round((flight.fixes.at(-1).t - flight.fixes[flight.takeoffIndex].t) / 60000);
+  showToast(`Flug „${name}“ geladen (${Math.floor(h / 60)}:${String(h % 60).padStart(2, "0")} h). ` +
+    (field ? `Höhe auf ${field.name} (${Math.round(field.elev)} m) abgeglichen.` : `${flight.altSource}-Höhe aus der Datei, ohne Abgleich.`));
+}
+
+function stopReplay() {
+  if (!replay) return;
+  replay.stop();
+  replay = null;
+  replayFlight = null;
+  replayEl.hidden = true;
+  mapView?.setFlight(null);
+}
+document.getElementById("rp-close").addEventListener("click", () => startSource());
+rpEls.speed.addEventListener("change", () => { if (last?.replay) setStatus("ok", `FLUG ${replay?.speed ?? ""}×`); });
+
+document.getElementById("igc-demo-info").textContent = DEMO_FLIGHT.label;
+document.getElementById("igc-demo").addEventListener("click", async () => {
+  try {
+    const res = await fetch(DEMO_FLIGHT.url);
+    if (!res.ok) throw new Error();
+    startReplay(parseIgc(await cupTextFromBuffer(await res.arrayBuffer())), DEMO_FLIGHT.name);
+  } catch (e) {
+    showToast(e.message || "Der Beispielflug konnte nicht geladen werden.");
+  }
+});
+
+const igcFile = document.getElementById("igc-file");
+igcFile.addEventListener("change", async () => {
+  const f = igcFile.files[0];
+  if (!f) return;
+  try { startReplay(parseIgc(await cupTextFromBuffer(await f.arrayBuffer())), f.name); }
+  catch (e) { showToast(e.message || "Die IGC-Datei konnte nicht gelesen werden."); }
+  igcFile.value = "";
+});
 
 // „Teilen → GlideWise“: der Service Worker legt die Datei im Cache ab
 async function handleShared() {
