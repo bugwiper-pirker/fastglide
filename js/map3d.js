@@ -175,35 +175,75 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     center: [14.5, 47.5], zoom: 10, pitch: 70, maxPitch: 85, elevation: 3000,
     centerClampedToGround: false,
     attributionControl: { compact: true },
+    // Kamera steuert dieses Modul selbst: sie kreist immer um das Flugzeug
+    interactive: false,
   });
-  map.addControl(new ml.NavigationControl({ visualizePitch: true }), "top-left");
 
   // ---- Zustand ----
   let target = null;            // letzte Position vom GPS / aus dem Flug
   let cur = null;               // geglättet für die Darstellung
   let bank = 0, prevTrack = null, prevTime = null;
-  let follow = true;
-  let bearingOffset = 0;        // Ansicht gedreht (0 = von hinten)
-  const PITCH = 78;
-  let viewPitch = PITCH;
+  // Kamera um das Flugzeug: Drehung gegenüber „von hinten“, Neigung, Zoom
+  const PITCH = 78, ZOOM = 16;
+  let bearingOffset = 0, viewPitch = PITCH, zoom = ZOOM;
   let flight = null, task = null, spaces = [];
   const vis = { airspace: true, task: true };
   function applyVisibility() {
+    if (asGroup) asGroup.visible = vis.airspace;
     if (!map.getLayer("airspace")) return;
     map.setLayoutProperty("airspace", "visibility", vis.airspace ? "visible" : "none");
     map.setLayoutProperty("task", "visibility", vis.task ? "visible" : "none");
   }
 
-  function setFollow(on) {
-    follow = on;
-    followBtn.hidden = on;
-    if (on) { bearingOffset = 0; viewPitch = PITCH; }
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  function viewChanged() {
+    const off = ((bearingOffset % 360) + 540) % 360 - 180; // −180 … 180
+    followBtn.hidden = Math.abs(off) < 1 && Math.abs(viewPitch - PITCH) < 1 && Math.abs(zoom - ZOOM) < 0.05;
   }
-  followBtn.addEventListener("click", () => setFollow(true));
-  // Verschieben beendet das Mitfliegen, Drehen und Neigen bleibt als Blickwinkel erhalten
-  map.on("dragstart", (e) => { if (e.originalEvent && !e.originalEvent.ctrlKey && e.originalEvent.button !== 2 && !(e.originalEvent.touches?.length > 1)) setFollow(false); });
-  map.on("rotate", (e) => { if (e.originalEvent && cur) bearingOffset = map.getBearing() - cur.track; });
-  map.on("pitch", (e) => { if (e.originalEvent) viewPitch = map.getPitch(); });
+  followBtn.title = "Ansicht zurücksetzen (von hinten)";
+  followBtn.addEventListener("click", () => { bearingOffset = 0; viewPitch = PITCH; zoom = ZOOM; viewChanged(); });
+
+  // Ziehen: um das Flugzeug drehen (waagrecht) und neigen (senkrecht).
+  // Zwei Finger: zoomen und drehen. Mausrad und +/−: zoomen.
+  const el = map.getCanvasContainer();
+  el.style.touchAction = "none";
+  const ptrs = new Map();
+  let pinch = null;
+  const two = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(b.x - a.x, b.y - a.y), a: Math.atan2(b.y - a.y, b.x - a.x) }; };
+  el.addEventListener("pointerdown", (e) => {
+    el.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) { const t = two(); pinch = { ...t, zoom, bearing: bearingOffset }; }
+  });
+  el.addEventListener("pointermove", (e) => {
+    const p = ptrs.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 1) {
+      bearingOffset -= dx * 0.35;
+      viewPitch = clamp(viewPitch - dy * 0.25, 0, 85);
+    } else if (pinch && ptrs.size === 2) {
+      const t = two();
+      zoom = clamp(pinch.zoom + Math.log2(t.d / pinch.d), 9, 19);
+      bearingOffset = pinch.bearing - ((t.a - pinch.a) * 180) / Math.PI;
+    }
+    viewChanged();
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; };
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", up);
+  el.addEventListener("wheel", (e) => { e.preventDefault(); zoom = clamp(zoom - e.deltaY * 0.002, 9, 19); viewChanged(); }, { passive: false });
+  el.addEventListener("dblclick", () => { zoom = clamp(zoom + 1, 9, 19); viewChanged(); });
+  const ctrl = document.createElement("div");
+  ctrl.className = "m3-ctrl";
+  for (const [txt, d, label] of [["+", 1, "Hineinzoomen"], ["−", -1, "Hinauszoomen"]]) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = txt; b.setAttribute("aria-label", label);
+    b.addEventListener("click", () => { zoom = clamp(zoom + d, 9, 19); viewChanged(); });
+    ctrl.appendChild(b);
+  }
+  container.appendChild(ctrl);
 
   // ---- three.js-Ebene ----
   let renderer, scene, camera, glider, trackLine = null;
@@ -234,11 +274,11 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       if (cur) {
         const mc = ml.MercatorCoordinate.fromLngLat([cur.lon, cur.lat], cur.alt);
         const unit = mc.meterInMercatorCoordinateUnits();
-        // Spannweite am Bildschirm mindestens ein Viertel der Kartenbreite (wie im Flugsimulator),
-        // beim Hineinzoomen echte Größe
-        const mpp = (40075016.7 * Math.cos((cur.lat * Math.PI) / 180)) / (512 * 2 ** map.getZoom());
+        // Größe wie im Flugsimulator: in der Grundansicht etwa ein Drittel der Kartenbreite,
+        // Zoomen macht es größer oder kleiner, aber nie kleiner als 50 Pixel Spannweite
+        const mpp = (z) => (40075016.7 * Math.cos((cur.lat * Math.PI) / 180)) / (512 * 2 ** z);
         const want = Math.min(300, Math.max(130, container.clientWidth * 0.33));
-        const s = Math.max(1, (want * mpp) / 20);
+        const s = Math.max(1, (want * mpp(ZOOM)) / 20, (50 * mpp(map.getZoom())) / 20);
         const rad = (d) => (d * Math.PI) / 180;
         const m = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
@@ -255,6 +295,46 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       map.triggerRepaint();
     },
   };
+
+  // Lufträume als halbtransparente Wände von der Unter- bis zur Obergrenze, Ränder als Linien
+  let asGroup = null;
+  function airspaceGeometry() {
+    if (asGroup) { scene.remove(asGroup); asGroup.traverse((o) => o.geometry?.dispose()); asGroup = null; }
+    if (!scene || !spaces.length) return;
+    const wall = [], wallCol = [], edge = [], edgeCol = [];
+    const merc = (lat, lon, alt) => { const m = ml.MercatorCoordinate.fromLngLat([lon, lat], alt); return [m.x, m.y, m.z]; };
+    for (const a of spaces) {
+      // GND und AGL ohne Geländedaten: ab knapp unter Meereshöhe bzw. wie MSL; offen nach oben: bis 10 000 m
+      const lo = a.lower.ref === "GND" ? -200 : a.lower.m;
+      const hi = Number.isFinite(a.upper.m) ? a.upper.m : 10000;
+      if (!(hi > lo)) continue;
+      const c = new THREE.Color((CATEGORIES[a.cat] || CATEGORIES.OTHER).color);
+      const step = Math.max(1, Math.floor(a.points.length / 240));
+      const ring = a.points.filter((_, i) => i % step === 0);
+      ring.push(ring[0]);
+      for (let i = 0; i < ring.length - 1; i++) {
+        const [la1, lo1] = ring[i], [la2, lo2] = ring[i + 1];
+        const p1 = merc(la1, lo1, lo), p2 = merc(la2, lo2, lo), q1 = merc(la1, lo1, hi), q2 = merc(la2, lo2, hi);
+        wall.push(...p1, ...p2, ...q2, ...p1, ...q2, ...q1);
+        for (let k = 0; k < 6; k++) wallCol.push(c.r, c.g, c.b);
+        edge.push(...q1, ...q2, ...p1, ...p2);
+        for (let k = 0; k < 4; k++) edgeCol.push(c.r, c.g, c.b);
+      }
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute("position", new THREE.Float32BufferAttribute(wall, 3));
+    wg.setAttribute("color", new THREE.Float32BufferAttribute(wallCol, 3));
+    const walls = new THREE.Mesh(wg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute("position", new THREE.Float32BufferAttribute(edge, 3));
+    eg.setAttribute("color", new THREE.Float32BufferAttribute(edgeCol, 3));
+    const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8 }));
+    for (const o of [walls, edges]) { o.frustumCulled = false; o.renderOrder = 2; }
+    asGroup = new THREE.Group();
+    asGroup.add(walls, edges);
+    asGroup.visible = vis.airspace;
+    scene.add(asGroup);
+  }
 
   function trackGeometry() {
     if (trackLine) { scene.remove(trackLine); trackLine.geometry.dispose(); trackLine = null; }
@@ -311,10 +391,11 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     map.addSource("shadow", { type: "geojson", data: empty });
     map.addSource("task", { type: "geojson", data: empty });
     map.addSource("airspace", { type: "geojson", data: empty });
-    map.addLayer({ id: "airspace", type: "line", source: "airspace", paint: { "line-color": ["get", "color"], "line-width": 2, "line-opacity": 0.85 } });
+    map.addLayer({ id: "airspace", type: "line", source: "airspace", paint: { "line-color": ["get", "color"], "line-width": 1.5, "line-opacity": 0.5 } });
     map.addLayer({ id: "task", type: "line", source: "task", paint: { "line-color": "#a1189f", "line-width": 3 } });
     map.addLayer({ id: "shadow", type: "line", source: "shadow", paint: { "line-color": "#000", "line-width": 2, "line-opacity": 0.35 } });
     map.addLayer(layer);
+    airspaceGeometry();
     trackGeometry();
     setGround();
     applyVisibility();
@@ -336,13 +417,11 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     const jump = Math.abs(target.lat - cur.lat) + Math.abs(target.lon - cur.lon) > 0.05;
     for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = jump ? target[key] : cur[key] + ((target[key] ?? 0) - (cur[key] ?? 0)) * k;
     cur.track = jump ? target.track : (cur.track + angDiff(target.track, cur.track) * k + 360) % 360;
-    if (follow) {
-      // Flugzeug im unteren Drittel, darüber Gelände und Horizont
-      map.jumpTo({
-        center: [cur.lon, cur.lat], elevation: cur.alt, bearing: cur.track + bearingOffset, pitch: viewPitch,
-        padding: { top: container.clientHeight * 0.3, bottom: 0, left: 0, right: 0 },
-      });
-    }
+    // Flugzeug im unteren Drittel, darüber Gelände und Horizont
+    map.jumpTo({
+      center: [cur.lon, cur.lat], elevation: cur.alt, zoom, bearing: cur.track + bearingOffset, pitch: viewPitch,
+      padding: { top: container.clientHeight * 0.3 * (viewPitch / 85), bottom: 0, left: 0, right: 0 },
+    });
   }
   raf = requestAnimationFrame(frame);
 
@@ -359,7 +438,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       }
       prevTrack = track; prevTime = p.time;
       target = { lat: p.lat, lon: p.lon, alt: p.alt ?? 0, track, speed: p.speedKmh || 0, vario: p.vario || 0 };
-      if (!cur) map.jumpTo({ center: [p.lon, p.lat], elevation: target.alt, zoom: 15, bearing: track, pitch: viewPitch });
+      if (!cur) map.jumpTo({ center: [p.lon, p.lat], elevation: target.alt, zoom, bearing: track, pitch: viewPitch });
     },
     setFlight(f, altOffset = 0) {
       flight = f ? { ...f, altOffset } : null;
@@ -367,7 +446,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       trackGeometry(); setGround();
     },
     setTask(t) { task = t; setGround(); },
-    setAirspaces(a) { spaces = a || []; setGround(); },
+    setAirspaces(a) { spaces = a || []; airspaceGeometry(); setGround(); },
     setImagery(key) {
       const src = IMAGERY[key] || IMAGERY.sat;
       if (!map.getSource("img")) return;

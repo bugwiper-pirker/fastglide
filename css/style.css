@@ -200,7 +200,8 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
 .mapview { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .map-wrap { position: relative; flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--bezel); }
 #map, #map3d { position: absolute; inset: 0; background: #d9dde2; }
-#map3d .maplibregl-ctrl-top-left { margin-top: 0; }
+.m3-ctrl { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; flex-direction: column; gap: 6px; }
+.m3-ctrl button { width: 44px; height: 44px; font-size: 1.4rem; background: #fff; color: #111; border: 1px solid #c9ced4; box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
 .recenter {
   position: absolute; right: 10px; bottom: 26px; z-index: 1000;
   font-size: 1.5rem; min-width: 48px; min-height: 48px; border-radius: 50%;
