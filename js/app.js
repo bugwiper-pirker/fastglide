@@ -10,6 +10,7 @@ import { readTaskBuffer, saveTask, loadTask, clearTask, isSoaringSpotPage, soari
 import { startGps, startSimulation } from "./sources.js";
 import { isIgc, parseIgc } from "./igc.js";
 import { createReplay } from "./replay.js";
+import { createMap3d } from "./map3d.js";
 import { createMapView } from "./map.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey, findByNames } from "./airspace.js";
 
@@ -17,7 +18,7 @@ import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspac
 const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false,
   asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
   asIgnore: [], asTraActive: false, asCleared: false,
-  showAirspace: true, showTask: true, page: "inst", mapSource: "osm" };
+  showAirspace: true, showTask: true, page: "inst", mapSource: "osm", map3d: false, map3dImagery: "sat" };
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ts-settings") || "{}") }; }
   catch { return { ...DEFAULTS }; }
@@ -85,6 +86,48 @@ function ensureMap() {
   if (lastPos) mapView.update(lastPos);
   return mapView;
 }
+// ---------- 3D-Ansicht ----------
+let map3d = null, map3dLoading = null;
+const map2dEl = document.getElementById("map"), map3dEl = document.getElementById("map3d");
+const tg3d = document.getElementById("tg-3d");
+const recenterEl = document.getElementById("recenter");
+function setMapTask(t) { mapView?.setTask(t); map3d?.setTask(t); }
+async function ensureMap3d() {
+  if (map3d) return map3d;
+  if (!map3dLoading) {
+    map3dLoading = createMap3d({
+      container: map3dEl,
+      followBtn: document.getElementById("follow3d"),
+      getImagery: () => settings.map3dImagery,
+    }).then((m) => {
+      map3d = m;
+      m.setAirspaces(airspaces);
+      m.setTask(task);
+      m.setLayerVisible("airspace", settings.showAirspace);
+      m.setLayerVisible("task", settings.showTask);
+      if (replayFlight) m.setFlight(replayFlight, replayOffset);
+      if (lastPos) m.update({ ...lastPos, speedKmh: last?.speedKmh, time: last?.time });
+      return m;
+    });
+  }
+  return map3dLoading;
+}
+async function setView3d(on) {
+  settings.map3d = on;
+  saveSettings();
+  tg3d.setAttribute("aria-pressed", on);
+  map2dEl.hidden = on;
+  map3dEl.hidden = !on;
+  if (on) recenterEl.hidden = true;
+  if (!on) { document.getElementById("follow3d").hidden = true; mapView?.shown(); return; }
+  try { (await ensureMap3d()).shown(); }
+  catch (e) {
+    showToast(e.message || "Die 3D-Ansicht konnte nicht geladen werden.");
+    setView3d(false);
+  }
+}
+tg3d.addEventListener("click", () => setView3d(!settings.map3d));
+
 function showPage(page) {
   settings.page = page;
   saveSettings();
@@ -96,6 +139,7 @@ function showPage(page) {
   pageBtn.title = isMap ? "Instrumente" : "Karte";
   pageBtn.setAttribute("aria-label", pageBtn.title);
   if (isMap && ensureMap()) requestAnimationFrame(() => mapView.shown());
+  if (isMap && settings.map3d) setView3d(true);
 }
 pageBtn.addEventListener("click", () => showPage(settings.page === "map" ? "inst" : "map"));
 
@@ -144,6 +188,7 @@ function onData(d) {
   };
   fg.update(pos);
   if (pos) { lastPos = pos; mapView?.update(pos); }
+  if (pos && map3d && settings.map3d && settings.page === "map") map3d.update({ ...pos, speedKmh: d.speedKmh, vario: c.vario, time: d.time });
   updateAirspaceWarnings(pos ? { ...pos, speedKmh: d.speedKmh } : null);
   setStatus("ok", d.replay ? `FLUG ${replay?.speed ?? ""}×` : settings.sim ? "SIMULATION" : `GPS ±${Math.round(d.accuracy)} m`);
 }
@@ -327,6 +372,12 @@ const soundBtn = document.getElementById("sound");
 const volumeIn = document.getElementById("volume");
 const sinkToneIn = document.getElementById("sink-tone");
 const sinkThrIn = document.getElementById("sink-threshold");
+const imagery3dIn = document.getElementById("map3d-imagery");
+imagery3dIn.addEventListener("change", () => {
+  settings.map3dImagery = imagery3dIn.value;
+  saveSettings();
+  map3d?.setImagery(settings.map3dImagery);
+});
 const mapSrcIn = document.getElementById("map-source");
 mapSrcIn.addEventListener("change", () => {
   settings.mapSource = mapSrcIn.value;
@@ -464,6 +515,7 @@ function useAirspaces(list) {
   airspaces = list;
   alerted.clear(); acked.clear();
   mapView?.setAirspaces(list);
+  map3d?.setAirspaces(list);
   updateAirspaceWarnings(lastPos && Date.now() - lastTime < STALE_MS ? { ...lastPos, speedKmh: last?.speedKmh } : null);
 }
 asFile.addEventListener("change", async () => {
@@ -563,6 +615,7 @@ document.getElementById("open-settings").addEventListener("click", () => {
   sinkToneIn.checked = settings.sinkTone;
   sinkThrIn.value = String(settings.sinkThreshold);
   mapSrcIn.value = settings.mapSource;
+  imagery3dIn.value = settings.map3dImagery;
   gpsAltOut.textContent = last && last.altitude != null ? `${Math.round(last.altitude)} m` : "keine";
   dlg.showModal();
 });
@@ -644,6 +697,7 @@ function setLayer(name, on) {
   if (name === "airspace") settings.showAirspace = on; else settings.showTask = on;
   saveSettings();
   mapView?.setLayerVisible(name, on);
+  map3d?.setLayerVisible(name, on);
   updateLayerUi();
 }
 tgAirspace.addEventListener("click", () => setLayer("airspace", !settings.showAirspace));
@@ -718,7 +772,7 @@ function useTask(fileName, t) {
   saveSettings();
   if (dlg.open) dlg.close();
   showPage("map");
-  mapView?.setTask(t);
+  setMapTask(t);
   mapView?.setLayerVisible("task", true);
   updateLayerUi();
   mapView?.fitTask();
@@ -764,7 +818,7 @@ taskFile.addEventListener("change", async () => {
 document.getElementById("task-clear").addEventListener("click", () => {
   task = null;
   clearTask();
-  mapView?.setTask(null);
+  setMapTask(null);
   updateLayerUi();
 });
 const taskUrl = document.getElementById("task-url");
@@ -800,7 +854,7 @@ async function loadTaskUrl(url) {
 document.getElementById("task-url-load").addEventListener("click", () => loadTaskUrl(taskUrl.value.trim()));
 
 // ---------- Flug abspielen (IGC) ----------
-let replay = null, replayFlight = null;
+let replay = null, replayFlight = null, replayOffset = 0;
 const replayEl = document.getElementById("replay");
 const rpEls = {
   play: document.getElementById("rp-play"), back: document.getElementById("rp-back"), fwd: document.getElementById("rp-fwd"),
@@ -836,13 +890,15 @@ function startReplay(flight, name) {
   if (flight.task) {
     task = flight.task;
     settings.showTask = true;
-    mapView?.setTask(task);
+    setMapTask(task);
     mapView?.setLayerVisible("task", true);
     updateLayerUi();
   }
   if (dlg.open) dlg.close();
   showPage("map");
   mapView?.setFlight(flight.fixes.map((f) => [f.lat, f.lon]));
+  replayOffset = offset;
+  map3d?.setFlight(flight, offset);
   mapView?.follow();
   replay = createReplay({ flight, altOffset: offset, els: rpEls, onData });
   replay.play();
@@ -860,10 +916,11 @@ function stopReplay() {
   replayFlight = null;
   replayEl.hidden = true;
   mapView?.setFlight(null);
+  map3d?.setFlight(null);
   // wieder die gespeicherte Aufgabe
   if (task && task === replayTask) {
     task = loadTask()?.task || null;
-    mapView?.setTask(task);
+    setMapTask(task);
     updateLayerUi();
   }
 }

@@ -19,6 +19,13 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
   - Wind, Polare, MacCready und Sinken werden nicht berücksichtigt. Die Rechnung ist rein geometrisch.
   - Die eigene Höhe ist die kalibrierte GPS-Höhe. Vor dem Flug unbedingt kalibrieren.
 - Kartenseite (🗺 oben, zurück mit ◎): Karte mit Flugzeugsymbol in Flugrichtung, Kurslinie (15 km voraus) und gestrichelter Linie zum Ziel. Wendepunkte aus der Datei sind eingezeichnet (grün = Landeplatz), Namen ab Zoomstufe 10. Ein Tippen auf einen Wendepunkt zeigt Name und Höhe sowie „Als Ziel wählen“. Die Karte folgt dem Flugzeug, nach dem Verschieben bringt ⌖ sie zurück. Die Endanflug-Box bleibt oben, Fahrt, Höhe und Vario stehen digital unter der Karte, auch im Querformat. Die Kartenseite nutzt die volle Fensterbreite. Kartenstil OpenStreetMap oder OpenTopoMap (Gelände), umschaltbar in ⚙. Angesehene Kartenkacheln werden gespeichert, bis zu 2000 Stück.
+- 3D-Ansicht (Knopf „3D“ auf der Karte): Gelände aus Höhendaten mit Luftbild, das Segelflugzeug (3D-Modell des Arcus M aus Fusion 360, `models/arcus.bin`, in echter Größe mit 20 m Spannweite, Wettbewerbskennzeichen am Seitenleitwerk, beim Abspielen aus der IGC-Datei) wird von hinten gezeigt wie im Flugsimulator. Die Kamera fliegt hinter dem Flugzeug mit, die Querneigung ergibt sich aus der Kurvenrate.
+  - Zoomen wie gewohnt. Drehen und Neigen mit zwei Fingern (am Computer rechte Maustaste oder Strg + Ziehen), der Blickwinkel bleibt dann beim Mitfliegen erhalten. Verschieben beendet das Mitfliegen, ⌖ setzt die Kamera wieder hinter das Flugzeug.
+  - Das Flugzeug ist am Bildschirm mindestens etwa ein Drittel der Kartenbreite groß, damit man es auch von weiter weg sieht. Beim Hineinzoomen wird es in echter Größe gezeigt.
+  - Beim Abspielen eines Flugs ist die Flugspur in der Luft eingezeichnet, gefärbt nach Steigen (grün) und Sinken (rot), dazu ihr Schatten am Boden. Aufgabe und Luftraumgrenzen liegen als Linien auf dem Gelände und lassen sich mit „Luftraum“ und „Aufgabe“ ausblenden.
+  - Anderes Flugzeug: ein binäres STL mit `python3 tools/stl2model.py modell.stl models/arcus.bin --span <Spannweite in m>` umwandeln. Im STL muss x von der Nase nach hinten, y nach oben und z entlang der Spannweite zeigen. Die Haube wird anhand ihrer Lage erkannt und blau gefärbt. Fehlt die Datei, zeigt die App ein einfaches, nachgebautes Modell.
+  - Bild in ⚙ → Karte wählbar: Luftbild (Sentinel-2 cloudless, ca. 10 m Auflösung) oder OpenTopoMap.
+  - Braucht Internet (Gelände und Bild werden nicht offline gespeichert) und belastet Akku und Grafik stärker als die 2D-Karte. MapLibre und three.js werden erst geladen, wenn man 3D zum ersten Mal einschaltet.
 - Lufträume: Mitgeliefert ist `data/austria_acg_airspaces_20261126.txt`, die OpenAir-Datei der Austro Control (gültig ab 26.11.2026). Sie wird automatisch geladen, wenn am Handy keine Luftraumdatei gespeichert ist. Eigene OpenAir-Dateien (.txt) lassen sich in ⚙ laden, SeeYou-CUB (Binärformat) wird nicht unterstützt.
   - Höhenangaben in ft und FL stehen auch in Metern dabei, z. B. „3500 ft MSL (1 067 m)“ oder „FL 95 (2 896 m)“.
   - Karte: Ränder nach Kategorie gefärbt. CTR rot, C dunkelblau, D blau, R rot, P dunkelrot, Q orange gestrichelt, TMZ violett gestrichelt, RMZ grün gestrichelt, TRA türkis gestrichelt. Tippen auf die Karte zeigt alle Lufträume an dieser Stelle mit Name, Untergrenze, Obergrenze, Kategorie und Frequenz.
@@ -91,11 +98,16 @@ js/audio.js                 Vario-Ton
 js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
 js/map.js                   Kartenseite (Leaflet)
+js/map3d.js                 3D-Ansicht (MapLibre GL, three.js): Gelände, Flugzeug, Flugspur
+models/arcus.bin            3D-Modell Arcus M (aus STL umgewandelt)
+tools/stl2model.py          STL in das Modellformat der App umwandeln
 js/airspace.js              Lufträume: OpenAir lesen, Warnlogik
 js/igc.js                   IGC-Flugaufzeichnung lesen
 js/replay.js                Flug abspielen: Zeitachse, Barogramm, Geschwindigkeit
 js/task.js                  Aufgaben: CUP, XCSoar .tsk und Soaring-Spot-Seiten lesen, Zonen-Geometrie
 vendor/leaflet/             Leaflet 1.9.4 (BSD-2-Clause), lokal für Offline-Betrieb
+vendor/maplibre/            MapLibre GL JS 5.24.0 (BSD-3-Clause), für die 3D-Ansicht
+vendor/three/               three.js r170 (MIT), Flugzeugmodell und Flugspur in 3D
 js/app.js                   Ablauf, Einstellungen, Bildschirm-an
 js/instruments/svg.js       Zeichenhilfen für Rundinstrumente
 js/instruments/airspeed.js  Fahrtmesser
@@ -120,5 +132,7 @@ So kommt ein neues Instrument dazu:
 Die Schrift ist B612 von Airbus, lizenziert unter der SIL Open Font License 1.1.
 
 Die Kartenbibliothek ist Leaflet (BSD-2-Clause, siehe `vendor/leaflet/LICENSE`). Kartendaten: © OpenStreetMap-Mitwirkende (ODbL), OpenTopoMap (CC-BY-SA).
+
+3D-Ansicht: MapLibre GL JS (BSD-3-Clause, siehe `vendor/maplibre/LICENSE.txt`), three.js (MIT, siehe `vendor/three/LICENSE`). Gelände: AWS Terrain Tiles (Terrarium, aus SRTM, EU-DEM u. a.). Luftbild: Sentinel-2 cloudless by EOX IT Services GmbH (enthält veränderte Copernicus-Sentinel-Daten 2023, CC BY-NC-SA 4.0, nur nicht-kommerziell).
 
 Luftraumdaten: Austro Control, erzeugt aus dem AIP Österreich. Ohne Gewähr, nur zur Ergänzung der Flugvorbereitung, kommerzielle Nutzung nicht gestattet (siehe Kopf der Datei).

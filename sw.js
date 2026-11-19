@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "glidewise-v19";
+const VERSION = "glidewise-v20";
 const FILES = [
   "./",
   "index.html",
@@ -22,6 +22,7 @@ const FILES = [
   "js/task.js",
   "js/igc.js",
   "js/replay.js",
+  "js/map3d.js",
   "data/2021_LOXN_Alle.cup",
   "data/austria_acg_airspaces_20261126.txt",
   "data/beispielflug_2025-07-06.igc",

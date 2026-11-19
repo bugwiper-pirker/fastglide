@@ -55,8 +55,11 @@
     <section class="mapview" id="mapview" hidden>
       <div class="map-wrap">
         <div id="map" aria-label="Karte"></div>
+        <div id="map3d" aria-label="3D-Karte" hidden></div>
         <button id="recenter" class="recenter" title="Auf Flugzeug zentrieren" hidden>⌖</button>
+        <button id="follow3d" class="recenter" title="Wieder hinter dem Flugzeug" hidden>⌖</button>
         <div class="map-toggles">
+          <button id="tg-3d" class="tg-mode" type="button" aria-pressed="false" title="3D-Ansicht">3D</button>
           <button id="tg-airspace" type="button" aria-pressed="true">Luftraum</button>
           <button id="tg-task" type="button" aria-pressed="true" hidden>Aufgabe</button>
         </div>
@@ -246,6 +249,13 @@
           </select>
         </label>
         <p class="hint">Die Karte braucht Internet. Angesehene Kartenteile werden gespeichert und sind danach auch ohne Empfang sichtbar.</p>
+        <label>Bild in der 3D-Ansicht
+          <select id="map3d-imagery">
+            <option value="sat">Luftbild (Sentinel-2)</option>
+            <option value="topo">OpenTopoMap</option>
+          </select>
+        </label>
+        <p class="hint">3D: Gelände aus SRTM-Höhendaten, das Flugzeug wird von hinten gezeigt. Ziehen mit zwei Fingern (oder rechter Maustaste) dreht und neigt die Ansicht, Zoomen geht wie gewohnt. Verschieben beendet das Mitfliegen, ⌖ setzt die Kamera wieder hinter das Flugzeug. Braucht Internet und belastet den Akku stärker.</p>
         <button type="button" id="fullscreen">Vollbild ein/aus</button>
       </fieldset>
 
