@@ -841,7 +841,7 @@ async function loadTaskUrl(url) {
   catch {
     showToast(soaringSpot
       ? "Soaring Spot ist gerade nicht erreichbar. Ist das Handy online?"
-      : "Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → GlideWise“ oder „Aufgabendatei laden“ öffnen.");
+      : "Der Server erlaubt den direkten Abruf nicht. Bitte die Aufgabendatei im Browser herunterladen und mit „Teilen → FastGlide“ oder „Aufgabendatei laden“ öffnen.");
     return;
   }
   if (!res.ok) { showToast(`Der Link liefert einen Fehler (${res.status}).`); return; }
@@ -948,7 +948,7 @@ igcFile.addEventListener("change", async () => {
   igcFile.value = "";
 });
 
-// „Teilen → GlideWise“: der Service Worker legt die Datei im Cache ab
+// „Teilen → FastGlide“: der Service Worker legt die Datei im Cache ab
 async function handleShared() {
   if (!new URLSearchParams(location.search).has("share")) return;
   history.replaceState(null, "", location.pathname);

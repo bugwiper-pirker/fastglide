@@ -1,6 +1,6 @@
 {
-  "name": "GlideWise",
-  "short_name": "GlideWise",
+  "name": "FastGlide",
+  "short_name": "FastGlide",
   "description": "Fahrt- und Höhenanzeige per GPS für den Segelflug",
   "lang": "de",
   "start_url": "./",

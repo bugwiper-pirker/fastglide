@@ -1,8 +1,8 @@
-# GlideWise
+# FastGlide
 
 PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog und digital an (in dieser Reihenfolge). Die Werte kommen vom GPS des Handys.
 
-**Wichtig:** Die Fahrt ist die GPS-Geschwindigkeit über Grund (GS), nicht die angezeigte Fahrt (IAS). Bei Gegenwind ist sie kleiner, bei Rückenwind größer als am Fahrtmesser. GlideWise ersetzt keine zugelassenen Instrumente.
+**Wichtig:** Die Fahrt ist die GPS-Geschwindigkeit über Grund (GS), nicht die angezeigte Fahrt (IAS). Bei Gegenwind ist sie kleiner, bei Rückenwind größer als am Fahrtmesser. FastGlide ersetzt keine zugelassenen Instrumente.
 
 ## Funktionen
 
@@ -39,7 +39,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
   - Grenzen der Prüfung: Verglichen wird mit der GPS-Höhe. FL ist Druckhöhe und kann um 100–300 m abweichen. AGL-Untergrenzen werden ohne Geländedaten ab Meereshöhe gerechnet, AGL-Obergrenzen als unbegrenzt. NOTAMs, MTAs und die Aktivierung von TRAs werden nicht berücksichtigt.
 - Kartenebenen: Auf der Karte schalten „Luftraum“ und „Aufgabe“ (oben rechts) die Ebenen ein und aus, ebenso in ⚙ → Kartenebenen. Ausgeblendete Lufträume werden weiter überwacht.
 - Aufgaben: SeeYou-/LX9000-Aufgaben (.cup mit „Related Tasks“, auch .cupx, so wie Soaring Spot sie liefert) und XCSoar-Aufgaben (.tsk).
-  - Laden über ⚙ → Aufgabe, über einen Link oder per **Teilen → GlideWise** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target), für Dateien und für Links.
+  - Laden über ⚙ → Aufgabe, über einen Link oder per **Teilen → FastGlide** aus dem Browser oder dem Datei-Manager. Die App ist dafür als Teilen-Ziel registriert (Web Share Target), für Dateien und für Links.
   - Soaring Spot: Den Link der Aufgabenseite einfügen oder in Chrome teilen, z. B. `https://www.soaringspot.com/de/aac2026/tasks/offene/task-1-on-2026-06-13`. Ein Link auf die Tagesergebnisse geht auch. Die App liest Punkte, Koordinaten, Höhen und Zonen direkt aus der Seite, die Wendepunktliste wird dafür nicht gebraucht. Das braucht den Proxy (siehe unten).
   - Andere Download-Links gehen nur, wenn der Server den direkten Abruf erlaubt.
   - Beim Teilen erkennt die App den Dateityp selbst: Aufgabe, Wendepunkte (.cup) oder Lufträume (OpenAir .txt).
@@ -47,7 +47,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
   - Aufgaben-Info: Ein Tippen auf den lila Balken (oder ⚙ → „Aufgaben-Info anzeigen“) öffnet ein Fenster mit allem, was zur Aufgabe bekannt ist: Punkte mit Schenkellängen und Zonen, Aufgabentyp, Abflugzeit, QNH, Aufgabenversion, inaktive Lufträume und die Aufgabennotizen (Frequenzen, Telefonnummern, Ausklinkhöhe …). Bei Soaring-Spot-Aufgaben kommt das alles von der Aufgabenseite, bei CUP-Dateien nur Mindestzeit und Abflugzeit. „Ganze Aufgabe auf der Karte“ zoomt auf die Aufgabe.
   - Die Strecke ist von Punktmitte zu Punktmitte gerechnet. Bei AAT ist das die nominelle Strecke, die Mindestzeit steht dabei.
   - CUP: Takeoff und Landing im Aufgabenkopf werden übersprungen. ObsZone=0 ist der Start. Wendepunkte werden aus `Point=`-Zeilen, aus dem Wendepunktteil der Datei oder aus der geladenen Wendepunktliste genommen.
-- Flug abspielen (IGC): In ⚙ → „Flug abspielen“ eine IGC-Datei laden, oder sie per Teilen → GlideWise öffnen. Der Flug läuft dann statt des GPS als Datenquelle: Instrumente, Vario-Ton, Endanflug, Aufgabe und Luftraumwarnung reagieren wie im echten Flug. Die Karte zeigt die ganze Flugspur und folgt dem Flugzeug.
+- Flug abspielen (IGC): In ⚙ → „Flug abspielen“ eine IGC-Datei laden, oder sie per Teilen → FastGlide öffnen. Der Flug läuft dann statt des GPS als Datenquelle: Instrumente, Vario-Ton, Endanflug, Aufgabe und Luftraumwarnung reagieren wie im echten Flug. Die Karte zeigt die ganze Flugspur und folgt dem Flugzeug.
   - Unten erscheint die Zeitachse mit dem Barogramm. Tippen oder Ziehen springt an die Stelle, ⏪/⏩ springen 1 Minute (bei hoher Geschwindigkeit mehr), die Geschwindigkeit ist von 1× bis 100× wählbar. ✕ beendet das Abspielen und schaltet zurück aufs GPS.
   - Die Wiedergabe beginnt 1 Minute vor dem Abflug. Die Uhrzeit ist Ortszeit laut Logger (Zeitzone aus der Datei, sonst die des Handys).
   - Höhe: die GPS-Höhe aus der Datei, wie beim Handy (ohne GPS-Höhe die Druckhöhe). Liegt ein Landeplatz aus der Wendepunktliste höchstens 3 km vom Abflugort entfernt, wird die Höhe am Boden auf dessen Platzhöhe abgeglichen, wie beim Kalibrieren. Die Höhenkorrektur aus ⚙ gilt beim Abspielen nicht.

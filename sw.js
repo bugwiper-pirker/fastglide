@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "glidewise-v22";
+const VERSION = "fastglide-v23";
 const FILES = [
   "./",
   "index.html",
@@ -51,6 +51,7 @@ self.addEventListener("activate", (e) => {
 
 // Kartenkacheln: beim Ansehen speichern, damit sie später ohne Empfang da sind.
 // Kein Vorab-Download ganzer Gebiete (Nutzungsbedingungen der Kartenserver).
+// Name aus der Zeit als „GlideWise“ beibehalten, damit gespeicherte Kacheln erhalten bleiben
 const TILE_CACHE = "glidewise-tiles";
 const TILE_MAX = 2000;
 const isTile = (url) => /(^|\.)tile\.(openstreetmap|opentopomap)\.org$/.test(url.hostname);
@@ -74,8 +75,8 @@ async function tileResponse(req) {
   }
 }
 
-// „Teilen → GlideWise“: geteilte Datei ablegen und die App öffnen
-const SHARE_CACHE = "glidewise-share";
+// „Teilen → FastGlide“: geteilte Datei ablegen und die App öffnen
+const SHARE_CACHE = "glidewise-share"; // alter Name, siehe TILE_CACHE
 async function receiveShare(req) {
   try {
     const form = await req.formData();
