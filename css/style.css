@@ -232,12 +232,8 @@ body.stale .glider-rot { opacity: .4; }
 .leaflet-container { font-family: var(--font-ui); }
 .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; font-size: 22px; }
 
-/* Querformat: Digitalwerte rechts neben der Karte */
-@media (orientation: landscape) {
-  .mapview { flex-direction: row; }
-  .digi { grid-template-columns: 1fr; width: clamp(150px, 22vw, 220px); align-content: stretch; }
-  .digi-c { justify-content: center; }
-}
+/* Kartenseite: volle Fensterbreite für die Karte, Digitalwerte immer darunter */
+body.map-page .app { max-width: none; }
 
 /* Luftraumwarnung: liegt über der Endanflug-Box */
 .aswarn {

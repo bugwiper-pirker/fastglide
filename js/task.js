@@ -273,13 +273,36 @@ export function parseSoaringSpotTask(html) {
   if (pts.length < 2) throw new Error("Die Aufgabe hat zu wenige Punkte.");
   const dur = Number(data.task_duration) || 0;
   const hh = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:00`;
+  const info = soaringSpotInfo(html, data);
+  const minAlt = finishMinAlt(info.notes);
+  if (minAlt != null) {
+    const fin = pts[pts.length - 1];
+    fin.minAlt = fin.oz.minAlt = minAlt;
+    info.facts.push(["Zielhöhe (Ankunft mind.)", `${Math.round(minAlt)} m MSL (aus den Notizen)`]);
+  }
   return finishTask({
     name: data.task_name || `Tag ${data.task_number || ""}`.trim(),
     aat: dur > 0,
     taskTime: dur > 0 ? hh(dur) : null,
     points: pts,
-    info: soaringSpotInfo(html, data),
+    info,
   });
+}
+
+// Mindest-Ankunftshöhe am Ziel aus freiem Text, z. B. „Ziellinie: min. 570 MSL“,
+// „Zielhöhe mind. 600 m“, „Finish: min 2000 ft MSL“, „minimum finish height 570m“.
+// Gelesen wird je Abschnitt (getrennt durch Zeilenende oder ;), damit z. B. die Ausklinkhöhe nicht stört.
+export function finishMinAlt(notes) {
+  for (const part of (notes || "").split(/[\n;]/)) {
+    if (!/(ziel|finish|arrival|ankunft)/i.test(part) || !/min/i.test(part)) continue;
+    const m = /(\d[\d.' ]{1,5}\d)\s*(m|ft|feet|fuß)?\b/i.exec(part.replace(/(\d)[.' ](\d{3})\b/g, "$1$2"));
+    if (!m) continue;
+    const v = Number(m[1].replace(/\D/g, ""));
+    const ft = /^(ft|feet|fuß)$/i.test(m[2] || "");
+    const meters = ft ? v * 0.3048 : v;
+    if (meters >= 100 && meters <= 5000) return Math.round(meters);
+  }
+  return null;
 }
 
 // Text aus einem HTML-Stück: Zeilenumbrüche aus <br>, Tags weg, Entities auflösen

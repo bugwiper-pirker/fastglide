@@ -89,6 +89,7 @@ function showPage(page) {
   settings.page = page;
   saveSettings();
   const isMap = page === "map";
+  document.body.classList.toggle("map-page", isMap);
   instPage.hidden = isMap;
   mapPage.hidden = !isMap;
   pageBtn.textContent = isMap ? "◎" : "🗺";
