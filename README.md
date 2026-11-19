@@ -69,7 +69,7 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
 
 1. Im Repository auf **Settings → Pages** gehen.
 2. Unter „Build and deployment“ als Quelle **Deploy from a branch** wählen, dann den Branch `main` und den Ordner `/ (root)`.
-3. Nach ein bis zwei Minuten ist die App unter `https://bugwiper-pirker.github.io/glidewise/` erreichbar.
+3. Nach ein bis zwei Minuten ist die App unter `https://bugwiper-pirker.github.io/fastglide/` erreichbar.
 
 ## Aufgaben von Soaring Spot (Proxy einrichten)
 
