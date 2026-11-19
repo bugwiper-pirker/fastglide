@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modellvorschau</title>
+<style>
+  body { margin: 0; background: #1d3c48; color: #fff; font: 14px system-ui, sans-serif; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  canvas { width: 100%; height: 300px; display: block; }
+  .grid:has(> canvas:only-child) canvas { height: 560px; }
+  p { margin: 4px 8px; }
+</style>
+</head>
+<body>
+<p>Vorschau von models/arcus.bin aus mehreren Richtungen (Werkzeug zum Prüfen des Modells, nicht Teil der App).</p>
+<div class="grid" id="g"></div>
+<script type="module">
+  import * as THREE from "../vendor/three/three.module.min.js";
+  import { loadModel, buildGlider } from "../js/map3d.js";
+  const model = await loadModel(THREE, "../models/arcus.bin");
+  const views = [
+    ["schräg vorne", [9, 10, 4], [0, 0, 0.3], 14],
+    ["Seite", [40, -1.5, 0.3], [0, -1.5, 0.3], 4.6],
+    ["oben", [0.01, -1.5, 40], [0, -1.5, 0], 5],
+    ["schräg wie Zeichnung", [-9, 9, 3], [0, -1, 0.4], 13],
+    ["Haube nah", [2.2, 3.2, 1.6], [0, 1.2, 0.5], 6],
+    ["Leitwerk nah", [2.2, -3.4, 1.2], [0, -5.2, 0.8], 5],
+  ];
+  // ?nur=Seite zeigt nur eine Ansicht, groß
+  const only = new URLSearchParams(location.search).get("nur");
+  if (only) document.getElementById("g").style.gridTemplateColumns = "1fr";
+  for (const [name, pos, look, fov] of views.filter((v) => !only || v[0] === only)) {
+    const cv = document.createElement("canvas");
+    document.getElementById("g").appendChild(cv);
+    const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+    r.setPixelRatio(devicePixelRatio);
+    r.setSize(cv.clientWidth, cv.clientHeight, false);
+    r.setClearColor(0x1d3c48);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+    sun.position.set(0.4, -0.6, 1).normalize();
+    scene.add(sun);
+    scene.add(buildGlider(THREE, "PV", model));
+    const cam = new THREE.PerspectiveCamera(fov * 3, cv.clientWidth / cv.clientHeight, 0.1, 200);
+    cam.up.set(0, 0, 1);
+    cam.position.set(...pos);
+    cam.lookAt(...look);
+    r.render(scene, cam);
+    cv.title = name;
+  }
+</script>
+</body>
+</html>

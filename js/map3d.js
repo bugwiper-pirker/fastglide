@@ -53,24 +53,105 @@ export async function loadModel(THREE, url = MODEL_URL) {
   if (!res.ok) throw new Error(`${url}: ${res.status}`);
   const buf = await res.arrayBuffer();
   const [n, nBody, nCanopy] = new Uint32Array(buf, 0, 3);
+  const P = new Float32Array(buf, 12, n * 3);
+  const I = new Uint16Array(buf, 12 + n * 12, (nBody + nCanopy) * 3);
+  return creasedGeometry(THREE, P, I, 35);
+}
+
+// Normalen mit Knickwinkel: Flächen, die stärker als crease° abknicken (Endleisten, Leitwerk,
+// Winglets), bekommen eine scharfe Kante, gewölbte Flächen (Rumpf, Profil) bleiben glatt.
+function creasedGeometry(THREE, P, I, crease) {
+  const nTri = I.length / 3;
+  const fn = new Float32Array(nTri * 3);
+  const byVertex = new Map();
+  for (let t = 0; t < nTri; t++) {
+    const [a, b, c] = [I[t * 3], I[t * 3 + 1], I[t * 3 + 2]];
+    const ux = P[b * 3] - P[a * 3], uy = P[b * 3 + 1] - P[a * 3 + 1], uz = P[b * 3 + 2] - P[a * 3 + 2];
+    const vx = P[c * 3] - P[a * 3], vy = P[c * 3 + 1] - P[a * 3 + 1], vz = P[c * 3 + 2] - P[a * 3 + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1;
+    // nicht normiert gewichtet nach Fläche, für den Winkelvergleich normiert
+    fn[t * 3] = nx / l; fn[t * 3 + 1] = ny / l; fn[t * 3 + 2] = nz / l;
+    for (const v of [a, b, c]) { let list = byVertex.get(v); if (!list) byVertex.set(v, (list = [])); list.push(t); }
+  }
+  const cos = Math.cos((crease * Math.PI) / 180);
+  const pos = new Float32Array(nTri * 9), nor = new Float32Array(nTri * 9);
+  for (let t = 0; t < nTri; t++) {
+    for (let k = 0; k < 3; k++) {
+      const v = I[t * 3 + k];
+      let nx = 0, ny = 0, nz = 0;
+      for (const o of byVertex.get(v)) {
+        const d = fn[t * 3] * fn[o * 3] + fn[t * 3 + 1] * fn[o * 3 + 1] + fn[t * 3 + 2] * fn[o * 3 + 2];
+        if (d >= cos) { nx += fn[o * 3]; ny += fn[o * 3 + 1]; nz += fn[o * 3 + 2]; }
+      }
+      const l = Math.hypot(nx, ny, nz) || 1;
+      const j = t * 9 + k * 3;
+      pos[j] = P[v * 3]; pos[j + 1] = P[v * 3 + 1]; pos[j + 2] = P[v * 3 + 2];
+      nor[j] = nx / l; nor[j + 1] = ny / l; nor[j + 2] = nz / l;
+    }
+  }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(buf, 12, n * 3), 3));
-  geo.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, 12 + n * 12, (nBody + nCanopy) * 3), 1));
-  geo.addGroup(0, nBody * 3, 0);      // Rumpf und Flügel
-  geo.addGroup(nBody * 3, nCanopy * 3, 1); // Haube
-  geo.computeVertexNormals();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
   return geo;
+}
+
+// Haube: wird nicht aus Dreiecken bestimmt (das ergibt einen gezackten Rand), sondern je Bildpunkt
+// aus ihrem Umriss laut Foto. Modellachsen: y nach vorne (Nase bei +2,88 m), z nach oben.
+// Von der Seite: lange Verglasung bis etwa halbe Rumpfhöhe, Unterkante fast waagrecht (z −0,02 hinten,
+// +0,04 vorne). Vorne endet sie gut 0,7 m hinter der Nase mit schräger Vorderkante (oben weiter vorne),
+// hinten knapp vor dem Flügel, unten leicht abgerundet.
+function canopyMaterial(THREE) {
+  const mat = new THREE.MeshPhongMaterial({ color: 0xf6f7f8, specular: 0x333333, shininess: 30, side: THREE.DoubleSide });
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vModel;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvModel = position;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", `#include <common>
+varying vec3 vModel;
+float canopyMask(vec3 p) {
+  if (abs(p.x) > 0.36 || p.y < -0.1 || p.y > 2.4) return 0.0;
+  float t = clamp(p.y / 2.15, 0.0, 1.0);
+  float zLow = -0.02 + 0.06 * t;
+  float aa = fwidth(p.z) * 1.2 + 1e-4, ab = fwidth(p.y) * 1.2 + 1e-4;
+  float h = max(p.z - zLow, 0.0);
+  float side = smoothstep(zLow - aa, zLow + aa, p.z);
+  // Vorderkante schräg: oben weiter vorne
+  float yF = 2.05 + 0.55 * h;
+  float front = 1.0 - smoothstep(yF - ab, yF + ab, p.y);
+  // Hinterkante fast senkrecht, unten leicht abgerundet
+  float yR = 0.05 + 0.12 * (1.0 - clamp(h / 0.15, 0.0, 1.0));
+  float back = smoothstep(yR - ab, yR + ab, p.y);
+  return side * front * back;
+}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+float cm = canopyMask(vModel);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.42, 0.66), cm);`)
+      .replace("#include <lights_fragment_begin>", `material.specularStrength = mix(0.25, 1.0, cm);
+material.specularShininess = mix(30.0, 90.0, cm);
+#include <lights_fragment_begin>`);
+  };
+  return mat;
 }
 
 // Wettbewerbskennzeichen auf beiden Seiten des Seitenleitwerks
 function addLabel(THREE, g, label, x, y, z) {
   if (!label) return;
+  // hoch aufgelöst und mit Mipmaps, damit es auch nah scharf ist; leicht vor der Fläche und mit
+  // Polygon-Versatz, damit es nicht mit dem Seitenleitwerk um die Tiefe kämpft (Flackern)
   const cv = document.createElement("canvas");
-  cv.width = 256; cv.height = 128;
+  cv.width = 1024; cv.height = 512;
   const c = cv.getContext("2d");
-  c.fillStyle = "#16181b"; c.font = "bold 96px Arial, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
-  c.fillText(label, 128, 70);
-  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, side: THREE.DoubleSide });
+  c.fillStyle = "#16181b"; c.font = "600 384px 'Helvetica Neue', Arial, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+  c.fillText(label, 512, 280);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
+  });
   for (const sx of [1, -1]) {
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), mat);
     pl.rotation.set(Math.PI / 2, sx * Math.PI / 2, 0);
@@ -86,8 +167,8 @@ export function buildGlider(THREE, label, model = null) {
   const white = new THREE.MeshLambertMaterial({ color: 0xf6f7f8, side: THREE.DoubleSide });
   const glass = new THREE.MeshPhongMaterial({ color: 0x1d8fd0, specular: 0xffffff, shininess: 80, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
   if (model) {
-    g.add(new THREE.Mesh(model, [white, glass]));
-    addLabel(THREE, g, label, 0.07, -5.3, 0.72);
+    g.add(new THREE.Mesh(model, canopyMaterial(THREE)));
+    addLabel(THREE, g, label, 0.075, -5.3, 0.72);
     return g;
   }
 
@@ -175,6 +256,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     center: [14.5, 47.5], zoom: 10, pitch: 70, maxPitch: 85, elevation: 3000,
     centerClampedToGround: false,
     attributionControl: { compact: true },
+    // Kantenglättung, sonst wirkt das Flugzeug von nah ausgefranst
+    canvasContextAttributes: { antialias: true },
     // Kamera steuert dieses Modul selbst: sie kreist immer um das Flugzeug
     interactive: false,
   });
@@ -253,13 +336,16 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   container.appendChild(ctrl);
 
   // ---- three.js-Ebene ----
-  let renderer, scene, camera, glider, trackLine = null;
+  // Flugzeug in eigener Szene: Ort und Maßstab stecken in der (in doppelter Genauigkeit gerechneten)
+  // Projektion, das Modell selbst bleibt in Metern. Sonst runden die Mercator-Koordinaten im
+  // Grafikchip auf etwa 1 m, und das Flugzeug wird zackig und streifig.
+  let renderer, scene, gliderScene, camera, glider, trackLine = null;
   function setGlider(label) {
-    if (glider) scene.remove(glider);
+    if (glider) gliderScene.remove(glider);
     glider = buildGlider(THREE, label, model);
     glider.matrixAutoUpdate = false;
     glider.visible = false;
-    scene.add(glider);
+    gliderScene.add(glider);
   }
   const layer = {
     id: "glider3d",
@@ -268,38 +354,49 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     onAdd(m, gl) {
       camera = new THREE.Camera();
       scene = new THREE.Scene();
-      scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+      gliderScene = new THREE.Scene();
+      gliderScene.add(new THREE.AmbientLight(0xffffff, 1.6));
       const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-      sun.position.set(0.4, -0.6, 1).normalize();
-      scene.add(sun);
+      sun.position.set(0.4, 0.6, 1).normalize();
+      gliderScene.add(sun);
       setGlider(flight?.cid || "PV");
       renderer = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true });
       renderer.autoClear = false;
     },
     render(gl, args) {
       const proj = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);
+      let gliderProj = null;
       if (cur) {
         const mc = ml.MercatorCoordinate.fromLngLat([cur.lon, cur.lat], cur.alt);
         const unit = mc.meterInMercatorCoordinateUnits();
-        // Größe wie im Flugsimulator: in der Grundansicht etwa ein Drittel der Kartenbreite,
-        // Zoomen macht es größer oder kleiner, aber nie kleiner als 50 Pixel Spannweite
+        // Größe wie im Flugsimulator: in der Grundansicht etwa ein Drittel der Kartenbreite.
+        // Zoomen ändert die Bildgröße nur halb so stark wie die Landschaft (auch beim Kreisen),
+        // mindestens 50 Pixel, höchstens 80 % der Breite, damit die Kamera nie ins Flugzeug gerät.
+        // Ist das echte Flugzeug (20 m) größer, wird es in echter Größe gezeichnet.
         const mpp = (z) => (40075016.7 * Math.cos((cur.lat * Math.PI) / 180)) / (512 * 2 ** z);
         const want = Math.min(300, Math.max(130, container.clientWidth * 0.33));
-        // beim Kreisen schrumpft das Flugzeug nur halb so stark wie die Landschaft
-        const s = Math.max(1, (want * mpp(ZOOM - zoomOut * 0.5)) / 20, (50 * mpp(map.getZoom())) / 20);
+        const z = map.getZoom();
+        const px = clamp(want * 2 ** ((z - ZOOM) * 0.5), 50, container.clientWidth * 0.8);
+        const s = Math.max(1, (px * mpp(z)) / 20);
         const rad = (d) => (d * Math.PI) / 180;
-        const m = new THREE.Matrix4()
-          .makeTranslation(mc.x, mc.y, mc.z)
-          .scale(new THREE.Vector3(unit * s, -unit * s, unit * s))
-          .multiply(new THREE.Matrix4().makeRotationZ(-rad(cur.track)))
+        // Ort und Maßstab (Meter → Mercator, Norden nach oben) in die Projektion
+        const place = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z)
+          .scale(new THREE.Vector3(unit * s, -unit * s, unit * s));
+        // Lage des Flugzeugs: Kurs, Querneigung, Längsneigung (in Metern, x Osten, y Norden, z oben)
+        glider.matrix.copy(new THREE.Matrix4().makeRotationZ(-rad(cur.track))
           .multiply(new THREE.Matrix4().makeRotationY(rad(bank)))
-          .multiply(new THREE.Matrix4().makeRotationX(Math.atan2(cur.vario || 0, Math.max(10, cur.speed / 3.6))));
-        glider.matrix.copy(m);
+          .multiply(new THREE.Matrix4().makeRotationX(Math.atan2(cur.vario || 0, Math.max(10, cur.speed / 3.6)))));
+        glider.matrixWorldNeedsUpdate = true;
         glider.visible = true;
+        gliderProj = proj.clone().multiply(place);
       }
       camera.projectionMatrix = proj;
       renderer.resetState();
       renderer.render(scene, camera);
+      if (gliderProj) {
+        camera.projectionMatrix = gliderProj;
+        renderer.render(gliderScene, camera);
+      }
       map.triggerRepaint();
     },
   };
