@@ -12,10 +12,14 @@ import { isIgc, parseIgc } from "./igc.js";
 import { createReplay } from "./replay.js";
 import { createMap3d } from "./map3d.js";
 import { createMapView } from "./map.js";
+import { POLARS, getPolarDef, makePolar, refWingLoading } from "./polar.js";
+import { createFlightAnalyzer } from "./flight.js";
+import { createTaskTracker } from "./taskspeed.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey, findByNames } from "./airspace.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
-const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, safeGlide: 35, target: null, wpCleared: false,
+const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, target: null, wpCleared: false,
+  polar: POLARS[0].id, mc: 1, wingLoading: null, bugs: 0, stfTone: true,
   asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
   asIgnore: [], asTraActive: false, asCleared: false,
   showAirspace: true, showTask: true, page: "inst", mapSource: "osm", map3d: false, map3dImagery: "sat" };
@@ -31,24 +35,54 @@ function saveSettings() {
 // ---------- Instrumente ----------
 // Neue Instrumente: Datei in js/instruments/ anlegen und hier eintragen.
 const instruments = [
-  { el: "asi", create: (svg) => createAirspeed(svg, AIRCRAFT.asi), value: (d) => d.speedKmh },
+  { el: "asi", create: (svg) => createAirspeed(svg, AIRCRAFT.asi), value: (d) => d.airKmh },
   { el: "vario", create: (svg) => createVario(svg, VARIO), value: (d) => d.vario, extra: (d) => ({ avg: d.varioAvg }) },
   { el: "alt", create: (svg) => createAltimeter(svg, ALTIMETER), value: (d) => d.altitude },
 ].map((i) => ({ ...i, inst: i.create(document.getElementById(i.el)), shown: null, target: null, extraVal: null }));
 const climb = createClimbCalculator();
 const varioInst = instruments.find((i) => i.el === "vario");
 const audio = createVarioAudio();
+const asiInst = instruments.find((i) => i.el === "asi");
+
+// ---------- Polare, Flugauswertung, Schnitt ----------
+let polar = buildPolar();
+function buildPolar() {
+  const def = getPolarDef(settings.polar);
+  return makePolar(def, { wingLoading: settings.wingLoading ?? refWingLoading(def), bugs: settings.bugs });
+}
+const analyzer = createFlightAnalyzer();
+const tracker = createTaskTracker();
+let fixLog = [];     // verarbeitete Punkte, damit eine neu geladene Aufgabe nachgerechnet werden kann
+let perf = null;     // letzte Werte für die Anzeige
+function feedFix(f) {
+  analyzer.process(f, polar);
+  tracker.process(f);
+  fixLog.push(f);
+  if (fixLog.length > 60000) fixLog = fixLog.filter((_, i) => i % 2 === 0);
+}
+function resetAnalysis() {
+  analyzer.reset();
+  tracker.reset();
+  fixLog = [];
+  perf = null;
+}
+function setTrackerTask(t) {
+  if (tracker.task === t) return;
+  tracker.setTask(t);
+  for (const f of fixLog) tracker.process(f);
+}
 
 // ---------- Endanflug ----------
 const fg = createFinalGlide({
   box: document.getElementById("fg"),
   picker: document.getElementById("picker"),
-  getSettings: () => ({ safetyHeight: settings.safetyHeight, safeGlide: settings.safeGlide, bestGlide: AIRCRAFT.bestGlide }),
+  getSettings: () => ({ safetyHeight: settings.safetyHeight, polar, mc: settings.mc, wind: analyzer.wind }),
   onSelect: (t) => { settings.target = t; saveSettings(); mapView?.setTarget(t); },
 });
 let waypoints = loadWaypoints()?.points || [];
 let airspaces = loadAirspace()?.spaces || [];
 let task = loadTask()?.task || null;
+tracker.setTask(task);
 fg.setPoints(waypoints, settings.target);
 
 // ---------- Kartenseite ----------
@@ -58,6 +92,14 @@ const instPage = document.querySelector(".gauges");
 const mapPage = document.getElementById("mapview");
 const pageBtn = document.getElementById("page");
 const digi = {
+  spdK: document.getElementById("d-spd-k"),
+  wind: document.getElementById("d-wind"),
+  stf: document.getElementById("d-stf"),
+  stfCmd: document.getElementById("d-stf-cmd"),
+  stfS: document.getElementById("d-stf-s"),
+  tskK: document.getElementById("d-tsk-k"),
+  tsk: document.getElementById("d-tsk"),
+  tskS: document.getElementById("d-tsk-s"),
   spd: document.getElementById("d-spd"),
   var: document.getElementById("d-var"),
   avg: document.getElementById("d-avg"),
@@ -91,7 +133,7 @@ let map3d = null, map3dLoading = null;
 const map2dEl = document.getElementById("map"), map3dEl = document.getElementById("map3d");
 const tg3d = document.getElementById("tg-3d");
 const recenterEl = document.getElementById("recenter");
-function setMapTask(t) { mapView?.setTask(t); map3d?.setTask(t); }
+function setMapTask(t) { mapView?.setTask(t); map3d?.setTask(t); setTrackerTask(t); }
 async function ensureMap3d() {
   if (map3d) return map3d;
   if (!map3dLoading) {
@@ -156,6 +198,63 @@ function updateDigital() {
   digi.avg.textContent = avg == null ? "Ø ---" : `Ø ${fmtVar(avg)}`;
 }
 
+const fmt1 = (v) => v.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtKmT = (km) => km.toLocaleString("de-AT", { maximumFractionDigits: km < 100 ? 1 : 0 });
+// Uhrzeit: beim Abspielen in der Zeitzone des Fluges
+function clockText(ms) {
+  if (ms == null) return "--:--";
+  const tz = replayFlight ? (replayFlight.tzHours != null ? replayFlight.tzHours * 3600000 : -new Date(ms).getTimezoneOffset() * 60000) : -new Date(ms).getTimezoneOffset() * 60000;
+  const d = new Date(ms + tz);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+const windText = (w) => w ? `${String(Math.round(w.from / 10) * 10 % 360).padStart(3, "0")}°/${Math.round(w.speed * 3.6)}` : null;
+
+// Sollfahrt, Schnitt und Wind aus der Flugauswertung
+function updatePerf(d) {
+  const air = analyzer.airspeed, wind = analyzer.wind;
+  const ias = air.fromWind ? air.ias : null;
+  const netto = analyzer.netto;
+  // beim Kreisen die Sollfahrt für den nächsten Gleitflug (ohne Netto)
+  const stf = polar.stf(settings.mc, analyzer.circling ? 0 : netto ?? 0) * 3.6;
+  const speed = ias ?? d.speedKmh;
+  perf = { ias, gs: d.speedKmh, wind, netto, stf, speed, circling: analyzer.circling };
+  asiInst.inst.setLabel(ias != null ? "IAS ber." : "GS");
+  asiInst.inst.setBug(d.speedKmh == null ? null : stf);
+  const flying = d.speedKmh != null && d.speedKmh > 40;
+  audio.setStf(settings.stfTone && flying && !perf.circling && speed != null ? speed - stf : null);
+}
+
+function renderPerf() {
+  const p = perf;
+  digi.spdK.textContent = p?.ias != null ? "Fahrt IAS ber." : "Fahrt GS";
+  digi.wind.textContent = !p ? "Wind ---" : p.wind ? `GS ${p.gs == null ? "--" : Math.round(p.gs)} · Wind ${windText(p.wind)}` : "Wind unbekannt";
+  digi.stf.textContent = p ? Math.round(p.stf) : "---";
+  let cmd = "", dir = "";
+  if (p && !p.circling && p.speed != null && p.gs > 40) {
+    const diff = p.speed - p.stf;
+    if (diff > 5) { cmd = `▲${Math.round(diff)}`; dir = "pull"; }
+    else if (diff < -5) { cmd = `▼${Math.round(-diff)}`; dir = "push"; }
+    else cmd = "●";
+  }
+  digi.stfCmd.textContent = cmd;
+  digi.stfCmd.dataset.dir = dir;
+  digi.stfCmd.title = dir === "pull" ? "zu schnell: ziehen" : dir === "push" ? "zu langsam: drücken" : "";
+  digi.stfS.textContent = `MC ${fmt1(settings.mc)}` + (!p ? "" : p.circling ? " · Kreisen" : p.netto != null ? ` · Netto ${fmtVar(p.netto)}` : " · ohne Wind");
+
+  const r = tracker.result();
+  if (r) {
+    digi.tskK.textContent = "Schnitt Aufgabe";
+    digi.tsk.textContent = r.speedKmh != null ? fmt1(r.speedKmh) : "---";
+    digi.tskS.textContent = r.state === "pre" ? "vor dem Abflug" : r.state === "done" ? `Ziel ${clockText(r.finishT)} · ${fmtKmT(r.km)} km` : `${fmtKmT(r.km)} km · ab ${clockText(r.startT)}`;
+  } else {
+    const fr = analyzer.free();
+    const h = fr.startT != null ? (fr.t - fr.startT) / 3600000 : 0;
+    digi.tskK.textContent = "Schnitt frei";
+    digi.tsk.textContent = fr.startT != null && h > 1 / 60 ? fmt1(fr.km / h) : "---";
+    digi.tskS.textContent = fr.startT != null ? `${fmtKmT(fr.km)} km (6 Schenkel) · ab ${clockText(fr.startT)}` : fr.src;
+  }
+}
+
 // ---------- Datenfluss ----------
 const STALE_MS = 5000;
 let last = null;      // letzter Rohwert
@@ -170,7 +269,24 @@ function onData(d) {
   if (d.reset) climb.reset();
   for (const s of d.samples || []) climb.add(s.t, s.alt, settings.varioWindow);
   const c = climb.add(d.time, d.altitude, settings.varioWindow);
+  // Flugauswertung: beim Abspielen die echten Punkte der Datei, nach einem Sprung neu ab Beginn
+  if (d.replay && replayFlight) {
+    if (d.reset) {
+      const lastT = fixLog.at(-1)?.t ?? -Infinity;
+      if (d.time < lastT || !fixLog.length) resetAnalysis();
+      const from = fixLog.at(-1)?.t ?? -Infinity;
+      for (const x of replayFlight.fixes) {
+        if (x.t > d.time) break;
+        if (x.t > from) feedFix({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + replayOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl });
+      }
+    } else for (const x of d.samples || []) feedFix(x);
+  } else if (d.lat != null) {
+    feedFix({ t: d.time, lat: d.lat, lon: d.lon, alt: d.altitude == null ? null : d.altitude + settings.altOffset, speedKmh: d.speedKmh, track: d.track });
+  }
+  updatePerf(d);
+
   const data = {
+    airKmh: perf?.speed ?? d.speedKmh,
     speedKmh: d.speedKmh,
     // die Höhe aus der IGC-Datei ist schon auf die Platzhöhe abgeglichen
     altitude: d.altitude == null ? null : d.altitude + (d.replay ? 0 : settings.altOffset),
@@ -209,12 +325,14 @@ function startSource() {
   if (stopSource) stopSource();
   last = null;
   climb.reset();
+  resetAnalysis();
   for (const i of instruments) { i.target = null; i.extraVal = null; }
   setStatus("wait", settings.sim ? "SIMULATION" : "GPS SUCHT …");
   stopSource = settings.sim ? startSimulation(onData) : startGps(onData, onError);
 }
 
 // Zeiger weich nachführen; veraltete Daten deutlich anzeigen
+let frameCount = 0;
 function frame() {
   const stale = last && Date.now() - lastTime > STALE_MS;
   document.body.classList.toggle("stale", !last || stale);
@@ -229,7 +347,9 @@ function frame() {
     i.inst.update(i.shown, i.extraVal);
   }
   audio.setValue(stale ? null : varioInst.target);
+  if (stale) audio.setStf(null);
   if (settings.page === "map") updateDigital();
+  if (frameCount++ % 10 === 0) renderPerf();
   requestAnimationFrame(frame);
 }
 
@@ -579,14 +699,109 @@ document.getElementById("as-test").addEventListener("click", async () => {
 });
 
 const safetyIn = document.getElementById("safety-height");
-const safeGlideIn = document.getElementById("safe-glide");
 safetyIn.addEventListener("change", () => {
   settings.safetyHeight = Math.max(0, Number(safetyIn.value) || 0);
   saveSettings(); fg.render();
 });
-safeGlideIn.addEventListener("change", () => {
-  settings.safeGlide = Math.max(5, Number(safeGlideIn.value) || 35);
-  saveSettings(); fg.render();
+
+// ---------- Sollfahrt: Polare, MC, Flächenbelastung, Mücken ----------
+const polarIn = document.getElementById("polar");
+const stfToneIn = document.getElementById("stf-tone");
+const stfDlg = document.getElementById("stf-dlg");
+const mcIn = document.getElementById("mc"), wlIn = document.getElementById("wing-loading"), bugsIn = document.getElementById("bugs");
+polarIn.replaceChildren(...POLARS.map((p) => new Option(p.name, p.id)));
+function showPolarInfo() {
+  const d = polar.def;
+  const wl0 = refWingLoading(d);
+  document.getElementById("polar-info").textContent =
+    `${d.source}. Bezug ${fmt1(wl0)} kg/m² (${d.refMass} kg), Fläche ${fmt1(d.area)} m²` + (d.maxMass ? `, höchstens ${d.maxMass} kg (${fmt1(d.maxMass / d.area)} kg/m²).` : ".");
+  document.getElementById("stf-info").textContent =
+    `${Math.round(polar.mass)} kg Flugmasse · beste Gleitzahl ${Math.round(polar.bestGlide)} bei ${Math.round(polar.vBestGlide * 3.6)} km/h · ` +
+    `Sollfahrt in ruhiger Luft bei MC ${fmt1(settings.mc)}: ${Math.round(polar.stf(settings.mc) * 3.6)} km/h. ` +
+    `Polare ${d.name}, Bezug ${fmt1(wl0)} kg/m²` + (d.maxMass ? `, höchstens ${fmt1(d.maxMass / d.area)} kg/m²` : "") + ".";
+}
+function applyStf() {
+  polar = buildPolar();
+  saveSettings();
+  showPolarInfo();
+  fg.render();
+  if (last) updatePerf(last);
+  renderPerf();
+}
+function fillStfDlg() {
+  mcIn.value = settings.mc.toFixed(1);
+  wlIn.value = (settings.wingLoading ?? refWingLoading(polar.def)).toFixed(1);
+  bugsIn.value = settings.bugs;
+  showPolarInfo();
+}
+const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function setStfValue(key, v) {
+  if (!Number.isFinite(v)) return;
+  if (key === "mc") settings.mc = Math.round(clampNum(v, 0, 6) * 10) / 10;
+  if (key === "wl") settings.wingLoading = Math.round(clampNum(v, 20, 80) * 10) / 10;
+  if (key === "bugs") settings.bugs = Math.round(clampNum(v, 0, 50));
+  fillStfDlg();
+  applyStf();
+}
+stfDlg.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-step]");
+  if (!b) return;
+  const [key, step] = b.dataset.step.split(":");
+  const cur = key === "mc" ? settings.mc : key === "wl" ? (settings.wingLoading ?? refWingLoading(polar.def)) : settings.bugs;
+  setStfValue(key, cur + Number(step));
+});
+mcIn.addEventListener("change", () => setStfValue("mc", Number(mcIn.value.replace(",", "."))));
+wlIn.addEventListener("change", () => setStfValue("wl", Number(wlIn.value.replace(",", "."))));
+bugsIn.addEventListener("change", () => setStfValue("bugs", Number(bugsIn.value)));
+function openStf() { fillStfDlg(); stfDlg.showModal(); }
+document.getElementById("d-stf-box").addEventListener("click", openStf);
+document.getElementById("open-stf").addEventListener("click", openStf);
+polarIn.addEventListener("change", () => { settings.polar = polarIn.value; settings.wingLoading = null; applyStf(); });
+stfToneIn.addEventListener("change", () => { settings.stfTone = stfToneIn.checked; saveSettings(); if (last) updatePerf(last); });
+
+// ---------- Schnitt: Details und Start von Hand ----------
+const avgDlg = document.getElementById("avg-dlg");
+function showAvg() {
+  const facts = document.getElementById("avg-facts");
+  facts.replaceChildren();
+  const add = (k, v) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; facts.append(dt, dd); };
+  const r = tracker.result();
+  if (r) {
+    add("Aufgabe", taskSummary(task));
+    if (r.state === "pre") add("Abflug", "noch nicht");
+    else {
+      add("Abflug", clockText(r.startT));
+      add("Geflogen", `${fmtKmT(r.km)} km`);
+      if (r.state === "done") add("Ziel", clockText(r.finishT));
+      else add("Nächster Punkt", task.points[r.next]?.name || "-");
+      if (r.speedKmh != null) add("Schnitt", `${fmt1(r.speedKmh)} km/h`);
+    }
+  }
+  const fr = analyzer.free();
+  if (fr.startT != null) {
+    const h = (fr.t - fr.startT) / 3600000;
+    add("Frei ab", `${clockText(fr.startT)} (${fr.src})`);
+    add("Strecke frei", `${fmtKmT(fr.km)} km über 6 Schenkel`);
+    if (h > 1 / 60) add("Schnitt frei", `${fmt1(fr.km / h)} km/h`);
+  } else add("Frei", fr.src);
+  const w = analyzer.wind;
+  add("Wind", w ? `${windText(w)} km/h (geschätzt ${clockText(w.t)})` : "noch nicht geschätzt");
+  avgDlg.showModal();
+}
+document.getElementById("d-avg-box").addEventListener("click", showAvg);
+document.getElementById("avg-now").addEventListener("click", () => {
+  if (!last) { showToast("Noch keine Position."); return; }
+  analyzer.setManualStart(fixLog.at(-1)?.t ?? last.time);
+  renderPerf(); avgDlg.close();
+  showToast("Schnitt ohne Aufgabe beginnt jetzt.");
+});
+document.getElementById("avg-auto").addEventListener("click", () => {
+  analyzer.setManualStart(null);
+  // automatische Erkennung über die bisherigen Punkte neu rechnen
+  const log = fixLog;
+  resetAnalysis();
+  for (const f of log) feedFix(f);
+  renderPerf(); avgDlg.close();
 });
 
 // Browser erlauben Ton erst nach einer Berührung: beim ersten Tippen nachholen
@@ -610,7 +825,9 @@ document.getElementById("open-settings").addEventListener("click", () => {
   asSoundIn.checked = settings.asAlertSound;
   asTraIn.checked = settings.asTraActive;
   for (const cb of asCatsEl.querySelectorAll("input")) cb.checked = settings.asWarnCats.includes(cb.value);
-  safeGlideIn.value = settings.safeGlide;
+  polarIn.value = settings.polar;
+  stfToneIn.checked = settings.stfTone;
+  showPolarInfo();
   showWpInfo();
   volumeIn.value = settings.volume;
   sinkToneIn.checked = settings.sinkTone;
@@ -883,6 +1100,7 @@ function startReplay(flight, name) {
   stopSource = null;
   last = null;
   climb.reset();
+  resetAnalysis();
   for (const i of instruments) { i.target = null; i.extraVal = null; }
   const { offset, field } = replayAltOffset(flight);
   replayFlight = flight;

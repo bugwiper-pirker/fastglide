@@ -4,6 +4,7 @@
 //   HFPLTPILOTINCHARGE:Name      Pilot, ebenso GTY (Muster), GID (Kennzeichen), CID (Wettbewerbskennzeichen)
 //   HFTZNTIMEZONE:2.0            Zeitzone des Loggers (optional)
 //   B 103031 4621138N 01410716E A 00463 00546 …
+//   I-Satz: Zusatzfelder im B-Satz, verwendet wird ENL (Motorgeräusch) bzw. MOP (Motorstrom)
 //     Zeit (UTC), Breite (GGMMmmm), Länge (GGGMMmmm), A = 3D-Fix, Druckhöhe, GPS-Höhe (m)
 
 import { distanceKm } from "./waypoints.js";
@@ -18,8 +19,13 @@ export function parseIgc(text) {
   let date = null;
   const fixes = [];
   let dayOffset = 0, lastSec = -1;
+  let enlAt = null; // Motorgeräusch (ENL) bzw. Motorstrom (MOP) aus dem I-Satz: Spalten im B-Satz
   for (const l of lines) {
-    if (l.startsWith("H")) {
+    if (l.startsWith("I") && !enlAt) {
+      const ext = {};
+      for (let k = 3; k + 7 <= l.length; k += 7) ext[l.slice(k + 4, k + 7)] = [Number(l.slice(k, k + 2)) - 1, Number(l.slice(k + 2, k + 4))];
+      enlAt = ext.ENL || ext.MOP || null;
+    } else if (l.startsWith("H")) {
       const key = l.slice(2, 5).toUpperCase();
       const val = l.includes(":") ? l.slice(l.indexOf(":") + 1).trim() : l.slice(5).trim();
       if (key === "DTE") {
@@ -35,7 +41,8 @@ export function parseIgc(text) {
       const lat = (Number(m[4]) + Number(m[5]) / 60000) * (m[6] === "S" ? -1 : 1);
       const lon = (Number(m[7]) + Number(m[8]) / 60000) * (m[9] === "W" ? -1 : 1);
       if (!lat && !lon) continue;
-      fixes.push({ t: (date ?? 0) + (sec + dayOffset) * 1000, lat, lon, baro: Number(m[11]), gps: Number(m[12]), valid: m[10] === "A" });
+      const enl = enlAt && l.length >= enlAt[1] ? Number(l.slice(enlAt[0], enlAt[1])) : null;
+      fixes.push({ t: (date ?? 0) + (sec + dayOffset) * 1000, lat, lon, baro: Number(m[11]), gps: Number(m[12]), valid: m[10] === "A", enl: Number.isFinite(enl) ? enl : null });
     }
   }
   if (fixes.length < 10) throw new Error("In der IGC-Datei wurden zu wenige Positionen gefunden.");

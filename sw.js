@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "fastglide-v23";
+const VERSION = "fastglide-v24";
 const FILES = [
   "./",
   "index.html",
@@ -23,6 +23,9 @@ const FILES = [
   "js/igc.js",
   "js/replay.js",
   "js/map3d.js",
+  "js/polar.js",
+  "js/flight.js",
+  "js/taskspeed.js",
   "data/2021_LOXN_Alle.cup",
   "data/austria_acg_airspaces_20261126.txt",
   "data/beispielflug_2025-07-06.igc",

@@ -1,19 +1,21 @@
-// Endanflugrechner: zeigt Ziel, Distanz, Zielhöhe und erforderliche Gleitzahl.
+// Endanflugrechner: zeigt Ziel, Distanz, erforderliche Gleitzahl und Ankunftshöhe.
 //
 // Erforderliche Gleitzahl = Distanz / (eigene Höhe − Zielhöhe − Sicherheitshöhe)
 // Hat das Ziel einer Aufgabe eine Mindest-Ankunftshöhe (minAlt, MSL), wird darauf gerechnet,
 // wenn sie höher liegt (darunter gibt es im Wettbewerb Strafpunkte).
-// Ohne Wind und ohne Polare: eine reine geometrische Rechnung.
+// Ankunft: nach MacCready mit Polare, MC-Wert und Gegen-/Rückenwind (sobald geschätzt).
 
 import { distanceKm, LANDABLE } from "./waypoints.js";
 import { bearingDeg } from "./sources.js";
 
 const fmtDist = (km) => (km < 10 ? km.toFixed(1) : Math.round(km).toString());
+const fmtSigned = (m) => (m > 0.5 ? "+" : m < -0.5 ? "−" : "") + Math.abs(Math.round(m));
+const fmtMc = (v) => v.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export function createFinalGlide({ box, picker, getSettings, onSelect }) {
   const $ = (sel) => box.querySelector(sel);
   const nameEl = $(".fg-name"), codeEl = $(".fg-code");
-  const distEl = $("#fg-dist"), ldEl = $("#fg-ld"), elevEl = $("#fg-elev"), noteEl = $(".fg-note");
+  const distEl = $("#fg-dist"), ldEl = $("#fg-ld"), elevEl = $("#fg-arr"), noteEl = $(".fg-note");
   const dirEl = $(".fg-dir"), arrowEl = $(".fg-arrow"), turnEl = $(".fg-turn");
   let arrowAngle = 0; // aktuell gezeichneter Winkel (fortlaufend, ohne Sprung bei 360°)
 
@@ -66,7 +68,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     nameEl.textContent = target.name;
     codeEl.textContent = target.code;
     const minAlt = target.minAlt ?? null;
-    elevEl.textContent = minAlt != null ? Math.round(minAlt) : target.elev == null ? "?" : Math.round(target.elev);
+    elevEl.textContent = "--";
 
     if (!pos) {
       distEl.textContent = ldEl.textContent = "--";
@@ -85,21 +87,26 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     const ground = target.elev == null ? -Infinity : target.elev + s.safetyHeight;
     const floor = Math.max(ground, minAlt ?? -Infinity);
     const usable = pos.alt - floor;
-    const reserve = minAlt != null && minAlt >= ground ? `Ankunft mind. ${Math.round(minAlt)} m` : `inkl. ${s.safetyHeight} m Reserve`;
+    const reserve = minAlt != null && minAlt >= ground ? `Ankunft mind. ${Math.round(minAlt)} m` : `Ziel ${Math.round(target.elev)} + ${s.safetyHeight} m`;
     if (d < 0.3) {
       ldEl.textContent = "--";
       box.dataset.state = "ok";
       noteEl.textContent = "Ziel erreicht";
-    } else if (usable <= 0) {
-      ldEl.textContent = "∞";
-      box.dataset.state = "bad";
-      noteEl.textContent = `${Math.round(-usable)} m zu tief · ${reserve}`;
-    } else {
-      const ld = (d * 1000) / usable;
-      ldEl.textContent = ld > 99 ? ">99" : Math.round(ld);
-      box.dataset.state = ld <= s.safeGlide ? "ok" : ld <= s.bestGlide ? "warn" : "bad";
-      noteEl.textContent = reserve;
+      return;
     }
+    ldEl.textContent = usable <= 0 ? "∞" : (d * 1000) / usable > 99 ? ">99" : Math.round((d * 1000) / usable);
+
+    // MacCready mit Wind: Gegenwind-Komponente auf dem Kurs zum Ziel
+    const w = s.wind;
+    const hw = w ? w.speed * Math.cos(((w.from - bearingDeg(pos.lat, pos.lon, target.lat, target.lon)) * Math.PI) / 180) : 0;
+    const g = s.polar.glide(s.mc, hw), g0 = s.polar.glide(0, hw);
+    const need = (ld) => (ld > 0 ? (d * 1000) / ld : Infinity);
+    const arrival = usable - need(g.ld), arrival0 = usable - need(g0.ld);
+    elevEl.textContent = Number.isFinite(arrival) ? fmtSigned(arrival) : "−∞";
+    box.dataset.state = arrival >= 0 ? "ok" : arrival0 >= 0 ? "warn" : "bad";
+    const windTxt = Math.abs(hw) * 3.6 >= 3 ? ` · ${hw > 0 ? "Gegen" : "Rücken"}wind ${Math.round(Math.abs(hw) * 3.6)}` : w ? "" : " · ohne Wind";
+    noteEl.textContent = `${reserve} · MC ${fmtMc(s.mc)} → ${Math.round(g.v * 3.6)} km/h${windTxt}` +
+      (arrival < 0 && arrival0 >= 0 ? ` · mit MC 0: ${fmtSigned(arrival0)} m` : "");
   }
 
   // ---- Auswahl-Dialog ----

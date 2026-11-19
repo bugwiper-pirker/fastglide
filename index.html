@@ -32,6 +32,18 @@
       </div>
     </div>
 
+    <section class="digi" aria-label="Digitale Anzeigen">
+      <div class="digi-c d-full"><span class="fg-k" id="d-spd-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b> km/h</span><span class="digi-s" id="d-wind">Wind ---</span></div>
+      <div class="digi-c d-full"><span class="fg-k">Höhe</span><span class="digi-n"><b id="d-alt">-----</b> m</span><span class="digi-s" id="d-altft">---- ft · FL ---</span></div>
+      <div class="digi-c d-full"><span class="fg-k">Vario</span><span class="digi-n"><b id="d-var">---</b> m/s</span><span class="digi-s" id="d-avg">Ø ---</span></div>
+      <button type="button" class="digi-c d-stf" id="d-stf-box" aria-label="Sollfahrt, tippen für MC, Flächenbelastung und Mücken">
+        <span class="fg-k">Sollfahrt</span><span class="digi-n"><b id="d-stf">---</b> km/h <i id="d-stf-cmd" class="stf-cmd"></i></span><span class="digi-s" id="d-stf-s">MC ---</span>
+      </button>
+      <button type="button" class="digi-c d-avgspd" id="d-avg-box" aria-label="Schnitt, tippen für Details">
+        <span class="fg-k" id="d-tsk-k">Schnitt</span><span class="digi-n"><b id="d-tsk">---</b> km/h</span><span class="digi-s" id="d-tsk-s">---</span>
+      </button>
+    </section>
+
     <section id="fg" class="fg" data-state="none" role="button" tabindex="0" aria-label="Endanflug: Ziel wählen">
       <div class="fg-head"><span class="fg-name">Endanflug</span><span class="fg-code"></span></div>
       <div class="fg-vals">
@@ -41,7 +53,7 @@
         </div>
         <div class="fg-v"><span class="fg-k">Distanz</span><span class="fg-n"><b id="fg-dist">--</b> km</span></div>
         <div class="fg-v fg-ld"><span class="fg-k">GZ erf.</span><span class="fg-n"><b id="fg-ld">--</b></span></div>
-        <div class="fg-v"><span class="fg-k">Zielhöhe</span><span class="fg-n"><b id="fg-elev">--</b> m</span></div>
+        <div class="fg-v fg-arr"><span class="fg-k">Ankunft</span><span class="fg-n"><b id="fg-arr">--</b> m</span></div>
       </div>
       <div class="fg-note">Wendepunktdatei in ⚙ laden</div>
     </section>
@@ -64,11 +76,6 @@
           <button id="tg-task" type="button" aria-pressed="true" hidden>Aufgabe</button>
         </div>
         <button id="task-chip" class="task-chip" type="button" title="Aufgaben-Info" hidden></button>
-      </div>
-      <div class="digi">
-        <div class="digi-c"><span class="fg-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b> km/h</span></div>
-        <div class="digi-c"><span class="fg-k">Höhe</span><span class="digi-n"><b id="d-alt">-----</b> m</span><span class="digi-s" id="d-altft">---- ft · FL ---</span></div>
-        <div class="digi-c"><span class="fg-k">Vario</span><span class="digi-n"><b id="d-var">---</b> m/s</span><span class="digi-s" id="d-avg">Ø ---</span></div>
       </div>
     </section>
 
@@ -112,6 +119,45 @@
     </form>
   </dialog>
 
+  <dialog id="stf-dlg" class="stf-dlg">
+    <form method="dialog" class="settings">
+      <h2 tabindex="-1" autofocus>Sollfahrt</h2>
+      <div class="stepper">
+        <span class="fg-k">MC (m/s)</span>
+        <button type="button" data-step="mc:-0.5" aria-label="MC minus 0,5">−</button>
+        <input id="mc" type="number" inputmode="decimal" step="0.1" min="0" max="6">
+        <button type="button" data-step="mc:0.5" aria-label="MC plus 0,5">+</button>
+      </div>
+      <div class="stepper">
+        <span class="fg-k">Flächenbel. (kg/m²)</span>
+        <button type="button" data-step="wl:-1" aria-label="Flächenbelastung minus 1">−</button>
+        <input id="wing-loading" type="number" inputmode="decimal" step="0.1" min="20" max="80">
+        <button type="button" data-step="wl:1" aria-label="Flächenbelastung plus 1">+</button>
+      </div>
+      <div class="stepper">
+        <span class="fg-k">Mücken (%)</span>
+        <button type="button" data-step="bugs:-5" aria-label="Mücken minus 5">−</button>
+        <input id="bugs" type="number" inputmode="numeric" step="1" min="0" max="50">
+        <button type="button" data-step="bugs:5" aria-label="Mücken plus 5">+</button>
+      </div>
+      <p class="hint" id="stf-info"></p>
+      <button class="primary">Schließen</button>
+    </form>
+  </dialog>
+
+  <dialog id="avg-dlg">
+    <form method="dialog" class="settings">
+      <h2 tabindex="-1" autofocus>Schnitt</h2>
+      <dl id="avg-facts" class="ti-facts"></dl>
+      <p class="hint">Mit Aufgabe: ab dem letzten Abflug (Startlinie überflogen bzw. Startkreis verlassen), bezogen auf die bereits geflogene Aufgabenstrecke.
+        Ohne Aufgabe: ab Motor aus bzw. Ausklinken, Strecke über bis zu 6 Schenkel bis zur Position optimiert.
+        Live sieht das Handy weder Motor noch Seil: erkannt wird der erste Bart oder das erste deutliche Sinken nach dem Steigflug.</p>
+      <button type="button" id="avg-now">Start ohne Aufgabe: jetzt</button>
+      <button type="button" id="avg-auto">Start ohne Aufgabe: automatisch</button>
+      <button class="primary">Schließen</button>
+    </form>
+  </dialog>
+
   <dialog id="settings">
     <form method="dialog" class="settings">
       <h2>Einstellungen</h2>
@@ -143,10 +189,23 @@
         <label>Sicherheitshöhe über Ziel (m)
           <input id="safety-height" type="number" inputmode="numeric" step="10" min="0">
         </label>
-        <label>Sichere Gleitzahl (darunter grün)
-          <input id="safe-glide" type="number" inputmode="numeric" step="1" min="5">
+        <p class="hint">Der Endanflug rechnet mit der Polare, dem MC-Wert und dem geschätzten Wind (siehe Sollfahrt).
+          „Ankunft“ ist die Höhe über Ziel plus Sicherheitshöhe bzw. über der Mindest-Ankunftshöhe der Aufgabe.
+          Grün: mit MC erreichbar. Gelb: nur mit MC 0 (bestes Gleiten). Rot: nicht erreichbar.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sollfahrt und Polare</legend>
+        <label>Polare
+          <select id="polar"></select>
         </label>
-        <p class="hint">Gelb bis zur besten Gleitzahl des Flugzeugs, darüber rot. Die Rechnung berücksichtigt weder Wind noch Sinken.</p>
+        <p class="hint" id="polar-info"></p>
+        <button type="button" id="open-stf">MC, Flächenbelastung, Mücken …</button>
+        <label class="row"><input id="stf-tone" type="checkbox"> Sollfahrtton im Geradeausflug</label>
+        <p class="hint">Das Handy misst keine Fahrt durch die Luft. Der Wind wird beim Kreisen (auch bei Wenden am Hang über ⅔ Kreis) aus dem Versatz geschätzt.
+          Daraus folgen Fahrt durch die Luft (IAS, berechnet), Netto-Steigen und die Sollfahrt zum Delfinfliegen.
+          Ohne Windschätzung (oder älter als 20 min) gilt die Sollfahrt für ruhige Luft, verglichen wird dann mit der Fahrt über Grund.
+          Ton: zu schnell = Pieptöne (ziehen), zu langsam = tiefer Dauerton (drücken), innerhalb ±5 km/h still.</p>
       </fieldset>
 
       <fieldset>
@@ -274,7 +333,7 @@
         <label class="row"><input id="sim" type="checkbox"> Simulation statt GPS</label>
       </fieldset>
 
-      <p class="hint warn">Die Fahrt ist die GPS-Geschwindigkeit über Grund, nicht die angezeigte Fahrt (IAS).
+      <p class="hint warn">Die Fahrt ist die GPS-Geschwindigkeit über Grund bzw. mit geschätztem Wind eine berechnete Fahrt durch die Luft.
         Sie ersetzt keinen Fahrtmesser.</p>
 
       <button id="close-settings" class="primary">Schließen</button>

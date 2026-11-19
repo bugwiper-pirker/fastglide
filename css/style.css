@@ -79,6 +79,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .mark-red { stroke: var(--red); stroke-width: 2.5; }
 .mark-blue { stroke: var(--blue); stroke-width: 2.5; }
 .mark-tri { fill: var(--yellow); }
+.stf-bug { fill: var(--accent); stroke: var(--face); stroke-width: 1; }
+body.stale .stf-bug { opacity: .2; }
 .arc-climb { stroke: var(--green); stroke-width: 3; fill: none; opacity: .7; }
 .arc-sink { stroke: var(--red); stroke-width: 3; fill: none; opacity: .7; }
 .avg { font-family: var(--font-num); font-size: 8px; fill: var(--ink); }
@@ -136,9 +138,9 @@ button.primary { background: var(--accent); color: #111; font-weight: 700; }
 .fg-k { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .fg-n { font-family: var(--font-num); font-size: .75rem; color: var(--muted); white-space: nowrap; }
 .fg-n b { font-size: 1.45rem; color: var(--ink); }
-.fg[data-state="ok"] .fg-ld b { color: var(--green); }
-.fg[data-state="warn"] .fg-ld b { color: var(--yellow); }
-.fg[data-state="bad"] .fg-ld b { color: var(--red); }
+.fg[data-state="ok"] .fg-arr b { color: var(--green); }
+.fg[data-state="warn"] .fg-arr b { color: var(--yellow); }
+.fg[data-state="bad"] .fg-arr b { color: var(--red); }
 .fg-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 52px; }
 .fg-dir svg { width: 42px; height: 42px; display: block; }
 .fg-arrow { transform-origin: 20px 20px; transform-box: view-box; transition: transform .6s ease-out; }
@@ -207,12 +209,25 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
   font-size: 1.5rem; min-width: 48px; min-height: 48px; border-radius: 50%;
   background: var(--accent); color: #111; box-shadow: 0 2px 8px rgb(0 0 0 / .35);
 }
-.digi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+/* Digitale Anzeigen: erste Zeile über dem Endanflug. Auf der Instrumentenseite nur Sollfahrt und Schnitt. */
+.digi { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .digi-c { background: var(--face); border: 1px solid var(--bezel); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 0; }
-.digi-n { font-family: var(--font-num); font-size: .78rem; color: var(--muted); white-space: nowrap; }
+button.digi-c { font: inherit; color: inherit; text-align: left; min-height: 0; cursor: pointer; }
+.digi-n { font-family: var(--font-num); font-size: .78rem; color: var(--muted); white-space: nowrap; display: flex; align-items: baseline; gap: 4px; }
 .digi-n b { font-size: 1.9rem; color: var(--ink); line-height: 1.1; }
-.digi-s { font-family: var(--font-num); font-size: .72rem; color: var(--muted); }
-@media (max-width: 400px) { .digi-n b { font-size: 1.55rem; } }
+.digi-s { font-family: var(--font-num); font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stf-cmd { font-style: normal; font-weight: 700; font-size: 1.05rem; color: var(--accent); margin-left: auto; }
+.stf-cmd[data-dir="push"] { color: var(--blue); }
+body:not(.map-page) .digi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body:not(.map-page) .d-full { display: none; }
+@media (max-width: 700px) {
+  body.map-page .digi { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  body.map-page .d-full { grid-column: span 2; }
+  body.map-page .d-stf, body.map-page .d-avgspd { grid-column: span 3; }
+  .digi-c { padding: 4px 8px; }
+  .digi-n b { font-size: 1.55rem; }
+}
+@media (max-width: 400px) { .digi-n b { font-size: 1.35rem; } }
 body.stale .digi-n b { color: var(--red); }
 
 /* Flugzeugsymbol */
@@ -283,3 +298,9 @@ body.map-page .app { max-width: none; }
   box-shadow: 0 1px 4px rgb(0 0 0 / .4);
 }
 input[type="url"] { font: inherit; font-size: .95rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--muted); background: var(--face); color: var(--ink); }
+
+/* Sollfahrt-Dialog */
+.stepper { display: grid; grid-template-columns: minmax(0, 1fr) 52px 96px 52px; align-items: center; gap: 8px; }
+.stepper button { font-size: 1.5rem; min-height: 48px; padding: 0; }
+.stepper input { text-align: center; width: 100%; }
+.fg-arr b { min-width: 3ch; display: inline-block; text-align: right; }

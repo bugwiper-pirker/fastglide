@@ -2,13 +2,18 @@
 // Steigen: Pieptöne, je stärker das Steigen, desto höher und schneller.
 // Sinken (optional): durchgehender tiefer Ton unterhalb einer Schwelle.
 // Dazwischen: Stille.
+// Sollfahrtton (Geradeausflug, wie beim LX): zu schnell = Pieptöne (ziehen),
+// zu langsam = tiefer Dauerton (drücken), innerhalb ±5 km/h still.
 
 const CLIMB_START = 0.2;   // m/s, ab hier piept es
 const MAX = 5;             // m/s, ab hier ändert sich der Ton nicht mehr
+const STF_DEAD = 5;        // km/h ohne Ton
+const STF_MAX = 40;        // km/h Abweichung, ab hier ändert sich der Ton nicht mehr
 
 export function createVarioAudio() {
   let ctx = null, osc = null, gain = null, timer = null;
   let value = null;          // aktuelles Steigen in m/s, null = keine Daten
+  let stf = null;            // Fahrt minus Sollfahrt (km/h), null = Vario-Ton
   let volume = 0.6;          // 0..1
   let sinkTone = false;
   let sinkThreshold = -2.5;  // m/s
@@ -33,7 +38,12 @@ export function createVarioAudio() {
   function tick() {
     if (!ctx || ctx.state !== "running") return;
     const now = ctx.currentTime;
-    const v = value;
+    // Sollfahrtton auf dieselben Töne abbilden: ziehen wie Steigen, drücken wie Sinken
+    const v = stf == null ? value
+      : stf > STF_DEAD ? CLIMB_START + (Math.min(stf - STF_DEAD, STF_MAX) / STF_MAX) * (MAX - CLIMB_START)
+      : stf < -STF_DEAD ? -(Math.min(-stf - STF_DEAD, STF_MAX) / STF_MAX) * MAX - 0.01
+      : 0;
+    const sinkOn = stf != null ? v < 0 : sinkTone && v <= sinkThreshold;
 
     if (v != null && v >= CLIMB_START) {
       const k = Math.min(v, MAX) / MAX;           // 0..1
@@ -50,7 +60,7 @@ export function createVarioAudio() {
         gain.gain.linearRampToValueAtTime(0, nextBeat + on);
         nextBeat += period;
       }
-    } else if (v != null && sinkTone && v <= sinkThreshold) {
+    } else if (v != null && sinkOn) {
       const k = Math.min(Math.abs(v), MAX) / MAX;
       const freq = 330 - k * 130;                 // 330..200 Hz
       if (mode !== "sink") {
@@ -112,6 +122,7 @@ export function createVarioAudio() {
     },
     isRunning: () => !!ctx && ctx.state === "running" && !!timer,
     setValue(v) { value = v; },
+    setStf(diff) { stf = diff; },
     setVolume(v) { volume = Math.min(Math.max(v, 0), 1); },
     setSinkTone(on, threshold) { sinkTone = on; if (threshold != null) sinkThreshold = threshold; },
   };

@@ -1,4 +1,5 @@
-// Fahrtmesser, analog + digital. Wert in km/h (hier: GPS-Geschwindigkeit über Grund).
+// Fahrtmesser, analog + digital. Wert in km/h: GPS-Fahrt über Grund oder mit Wind berechnete IAS.
+// Dazu eine Marke (Speed-Bug) für die Sollfahrt.
 import { C, el, pt, arcPath, radialLine, createDial, createNeedle, createHub, createWindow } from "./svg.js";
 
 export function createAirspeed(svg, cfg) {
@@ -34,12 +35,22 @@ export function createAirspeed(svg, cfg) {
   }
 
   el("text", { x: C, y: 68, class: "sub" }, svg).textContent = "km/h";
-  el("text", { x: C, y: 77, class: "sub" }, svg).textContent = "GS";
+  const label = el("text", { x: C, y: 77, class: "sub" }, svg);
+  label.textContent = "GS";
+  // Sollfahrt-Marke außen an der Skala
+  const bug = el("path", { class: "stf-bug", d: "" }, svg);
   const dig = createWindow(svg, 67, 112, 66, 25, 17);
   const needle = createNeedle(svg, 82, 3.2, 14);
   createHub(svg);
 
   return {
+    setLabel(t) { if (label.textContent !== t) label.textContent = t; },
+    setBug(v) {
+      if (v == null) { bug.setAttribute("d", ""); return; }
+      const a = ang(v);
+      const [tx, ty] = pt(82, a), [b1x, b1y] = pt(94, a - 4), [b2x, b2y] = pt(94, a + 4);
+      bug.setAttribute("d", `M${tx} ${ty} L${b1x} ${b1y} L${b2x} ${b2y} Z`);
+    },
     update(v) {
       if (v == null || Number.isNaN(v)) { dig.textContent = "---"; return; }
       needle.set(ang(v));

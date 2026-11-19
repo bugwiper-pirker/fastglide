@@ -21,10 +21,13 @@ export function createReplay({ flight, altOffset, els, onData }) {
     return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}` + (sec ? `:${two(d.getUTCSeconds())}` : "");
   };
 
+  // ein Punkt der Aufzeichnung so, wie ihn die Flugauswertung braucht
+  const fixData = (x) => ({ t: x.t, lat: x.lat, lon: x.lon, alt: x.alt + altOffset, speedKmh: x.speedKmh, track: x.track, enl: x.enl });
+
   function emit() {
     const f = fixAt(flight, t);
     const samples = [];
-    if (!jumped) for (let i = f.i; i >= 0 && fx[i].t > prevT; i--) samples.unshift({ t: fx[i].t, alt: fx[i].alt + altOffset });
+    if (!jumped) for (let i = f.i; i >= 0 && fx[i].t > prevT; i--) samples.unshift(fixData(fx[i]));
     onData({
       lat: f.lat, lon: f.lon, altitude: f.alt + altOffset, speedKmh: f.speedKmh, track: f.track,
       time: t, accuracy: 0, replay: true, reset: jumped, samples,

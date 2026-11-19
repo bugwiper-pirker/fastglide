@@ -387,7 +387,7 @@ export function loadTask() { try { return JSON.parse(localStorage.getItem(STORE_
 export function clearTask() { try { localStorage.removeItem(STORE_KEY); } catch {} }
 
 // ---------------- Geometrie der Zonen ----------------
-function bearing(a, b) {
+export function bearing(a, b) {
   const toRad = (d) => (d * Math.PI) / 180;
   const p1 = toRad(a.lat), p2 = toRad(b.lat), dl = toRad(b.lon - a.lon);
   const y = Math.sin(dl) * Math.cos(p2);
@@ -404,7 +404,7 @@ export function destination(lat, lon, brg, m) {
 const norm = (a) => ((a % 360) + 360) % 360;
 
 // Mittelrichtung der Zone (zeigt vom Punkt weg, in den Sektor hinein)
-function zoneAxis(task, i) {
+export function zoneAxis(task, i) {
   const pts = task.points, p = pts[i], oz = p.oz;
   const prev = pts[i - 1], next = pts[i + 1];
   if (oz.style === 0 && oz.a12 != null) return norm(oz.a12);
