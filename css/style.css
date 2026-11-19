@@ -78,6 +78,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .arc-yellow { stroke: var(--yellow); stroke-width: 5; fill: none; }
 .mark-red { stroke: var(--red); stroke-width: 2.5; }
 .mark-blue { stroke: var(--blue); stroke-width: 2.5; }
+.mark-yellow { stroke: var(--yellow); stroke-width: 2.5; }
 .mark-tri { fill: var(--yellow); }
 .stf-bug { fill: var(--accent); stroke: var(--face); stroke-width: 1; }
 body.stale .stf-bug { opacity: .2; }
@@ -309,6 +310,12 @@ body.map-page .app { max-width: none; }
   box-shadow: 0 1px 4px rgb(0 0 0 / .4);
 }
 input[type="url"] { font: inherit; font-size: .95rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--muted); background: var(--face); color: var(--ink); }
+
+/* Eigene Polare */
+.custom-polar { display: flex; flex-direction: column; gap: 10px; }
+.cp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.cp-grid input { width: 100%; }
+input[type="text"] { font: inherit; font-size: 1rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--muted); background: var(--face); color: var(--ink); }
 
 /* Sollfahrt-Dialog */
 .stepper { display: grid; grid-template-columns: minmax(0, 1fr) 52px 96px 52px; align-items: center; gap: 8px; }

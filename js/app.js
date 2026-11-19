@@ -12,14 +12,14 @@ import { isIgc, parseIgc } from "./igc.js";
 import { createReplay } from "./replay.js";
 import { createMap3d } from "./map3d.js";
 import { createMapView } from "./map.js";
-import { POLARS, getPolarDef, makePolar, refWingLoading } from "./polar.js";
+import { POLARS, getPolarDef, makePolar, refWingLoading, CUSTOM_ID, customDef, checkPolar } from "./polar.js";
 import { createFlightAnalyzer } from "./flight.js";
 import { createTaskTracker } from "./taskspeed.js";
 import { readAirspaceBuffer, readAirspaceFile, fetchDefaultAirspace, saveAirspace, loadAirspace, clearAirspace, checkAirspace, CATEGORIES, DEFAULT_WARN, altText, asKey, findByNames } from "./airspace.js";
 
 // ---------- Einstellungen (lokal im Browser gespeichert) ----------
 const DEFAULTS = { altOffset: 0, day: false, sim: false, varioWindow: 4, sound: false, volume: 60, sinkTone: false, sinkThreshold: -2.5, safetyHeight: 150, target: null, wpCleared: false,
-  polar: POLARS[0].id, mc: 1, wingLoading: null, bugs: 0, stfTone: true, igcAir: true,
+  polar: POLARS[0].id, customPolar: null, mc: 1, wingLoading: null, bugs: 0, stfTone: true, igcAir: true,
   asWarnKm: 2, asVMargin: 150, asAlertSound: true, asWarnCats: DEFAULT_WARN,
   asIgnore: [], asTraActive: false, asCleared: false,
   showAirspace: true, showTask: true, page: "inst", mapSource: "osm", map3d: false, map3dImagery: "sat" };
@@ -47,9 +47,22 @@ const asiInst = instruments.find((i) => i.el === "asi");
 // ---------- Polare, Flugauswertung, Schnitt ----------
 let polar = buildPolar();
 function buildPolar() {
-  const def = getPolarDef(settings.polar);
+  const def = getPolarDef(settings.polar, settings.customPolar);
   return makePolar(def, { wingLoading: settings.wingLoading ?? refWingLoading(def), bugs: settings.bugs });
 }
+// Fahrtmesser passend zum Flugzeug: Arcus M laut Flughandbuch, sonst nur v_NO
+let asiFor = null;
+function setupAsi() {
+  const def = polar.def;
+  const key = def.asi === "arcus" ? "arcus" : `${def.id}|${def.vno}|${def.vMax}`;
+  if (asiFor === key) return;
+  asiFor = key;
+  const cfg = def.asi === "arcus" ? AIRCRAFT.asi : { max: def.vMax > 285 ? 300 : 285, vno: def.vno || null };
+  const svg = document.getElementById("asi");
+  svg.replaceChildren();
+  asiInst.inst = createAirspeed(svg, cfg);
+}
+setupAsi();
 const analyzer = createFlightAnalyzer();
 analyzer.setUseLogger(settings.igcAir);
 const tracker = createTaskTracker();
@@ -748,12 +761,67 @@ const polarIn = document.getElementById("polar");
 const stfToneIn = document.getElementById("stf-tone");
 const stfDlg = document.getElementById("stf-dlg");
 const mcIn = document.getElementById("mc"), wlIn = document.getElementById("wing-loading"), bugsIn = document.getElementById("bugs");
-polarIn.replaceChildren(...POLARS.map((p) => new Option(p.name, p.id)));
+const polarSearch = document.getElementById("polar-search");
+const customBox = document.getElementById("custom-polar");
+// Liste: Arcus zuerst, dann alle aus XCSoar, am Ende die eigene Polare; die Suche filtert
+function fillPolarList() {
+  const q = polarSearch.value.trim().toLowerCase().replace(/[\s-]+/g, "");
+  const match = (p) => !q || p.name.toLowerCase().replace(/[\s-]+/g, "").includes(q) || p.id === settings.polar;
+  const group = (label, items) => {
+    const g = document.createElement("optgroup");
+    g.label = label;
+    g.append(...items.map((p) => new Option(p.name + (p.handicap ? ` · Index ${p.handicap}` : ""), p.id)));
+    return items.length ? [g] : [];
+  };
+  const own = customDef(settings.customPolar);
+  polarIn.replaceChildren(
+    ...group("Flughandbuch", POLARS.filter((p) => p.asi && match(p))),
+    ...group("XCSoar", POLARS.filter((p) => !p.asi && match(p))),
+    ...group("Eigene", [{ id: CUSTOM_ID, name: own ? `${own.name} (eigene)` : "Eigene Polare eingeben …" }].filter((p) => !q || match(p) || "eigene".includes(q))),
+  );
+  polarIn.value = settings.polar;
+}
+polarSearch.addEventListener("input", fillPolarList);
+function fillCustom() {
+  const d = settings.customPolar || polar.def; // zum Anpassen mit der aktuellen Polare vorbelegen
+  const $ = (id) => document.getElementById(id);
+  $("cp-name").value = settings.customPolar?.name || `${polar.def.name} (angepasst)`;
+  $("cp-mass").value = d.refMass; $("cp-area").value = d.area;
+  d.points.forEach(([v, s], i) => { $(`cp-v${i + 1}`).value = v; $(`cp-s${i + 1}`).value = s; });
+  $("cp-vno").value = d.vno ?? ""; $("cp-vne").value = settings.customPolar?.vne ?? "";
+}
+document.getElementById("cp-save").addEventListener("click", () => {
+  const num = (id) => Number(document.getElementById(id).value.replace(",", "."));
+  const c = {
+    name: document.getElementById("cp-name").value.trim() || "Eigene Polare",
+    refMass: num("cp-mass"), area: num("cp-area"),
+    points: [1, 2, 3].map((i) => [num(`cp-v${i}`), Math.abs(num(`cp-s${i}`))]),
+    vno: num("cp-vno") || null, vne: num("cp-vne") || null,
+  };
+  const def = customDef(c);
+  const vs = c.points.map((p) => p[0]);
+  if (!def || !(vs[0] < vs[1] && vs[1] < vs[2]) || !checkPolar(def)) {
+    showToast("Die Werte ergeben keine brauchbare Polare. Bitte Masse, Fläche und drei Punkte mit steigender Fahrt prüfen.");
+    return;
+  }
+  settings.customPolar = c;
+  settings.polar = CUSTOM_ID;
+  settings.wingLoading = null;
+  applyStf();
+  fillPolarList();
+  showToast(`Eigene Polare „${c.name}“ übernommen: beste Gleitzahl ${Math.round(polar.bestGlide)}.`);
+});
 function showPolarInfo() {
   const d = polar.def;
   const wl0 = refWingLoading(d);
+  customBox.hidden = polarIn.value !== CUSTOM_ID;
   document.getElementById("polar-info").textContent =
-    `${d.source}. Bezug ${fmt1(wl0)} kg/m² (${d.refMass} kg), Fläche ${fmt1(d.area)} m²` + (d.maxMass ? `, höchstens ${d.maxMass} kg (${fmt1(d.maxMass / d.area)} kg/m²).` : ".");
+    `${d.source}. Bezug ${fmt1(wl0)} kg/m² (${Math.round(d.refMass)} kg), Fläche ${fmt1(d.area)} m²` +
+    (d.maxMass ? `, höchstens ${d.maxMass} kg (${fmt1(d.maxMass / d.area)} kg/m²)` : "") +
+    (d.maxBallast ? `, Wasser bis ${Math.round(d.maxBallast)} l` : "") +
+    (d.emptyMass ? `, Leermasse ca. ${d.emptyMass} kg` : "") +
+    (d.vno ? `, v_NO ${d.vno} km/h` : "") +
+    `. Beste Gleitzahl ${Math.round(polar.bestGlide)} bei ${Math.round(polar.vBestGlide * 3.6)} km/h (bei der eingestellten Flächenbelastung).`;
   document.getElementById("stf-info").textContent =
     `${Math.round(polar.mass)} kg Flugmasse · beste Gleitzahl ${Math.round(polar.bestGlide)} bei ${Math.round(polar.vBestGlide * 3.6)} km/h · ` +
     `Sollfahrt in ruhiger Luft bei MC ${fmt1(settings.mc)}: ${Math.round(polar.stf(settings.mc) * 3.6)} km/h. ` +
@@ -761,6 +829,7 @@ function showPolarInfo() {
 }
 function applyStf() {
   polar = buildPolar();
+  setupAsi();
   saveSettings();
   showPolarInfo();
   fg.render();
@@ -795,7 +864,19 @@ bugsIn.addEventListener("change", () => setStfValue("bugs", Number(bugsIn.value)
 function openStf() { fillStfDlg(); stfDlg.showModal(); }
 document.getElementById("d-stf-box").addEventListener("click", openStf);
 document.getElementById("open-stf").addEventListener("click", openStf);
-polarIn.addEventListener("change", () => { settings.polar = polarIn.value; settings.wingLoading = null; applyStf(); });
+polarIn.addEventListener("change", () => {
+  if (polarIn.value === CUSTOM_ID && !customDef(settings.customPolar)) {
+    // noch keine eigene Polare: Eingabe zeigen, mit der aktuellen vorbelegt
+    fillCustom();
+    customBox.hidden = false;
+    return;
+  }
+  settings.polar = polarIn.value;
+  settings.wingLoading = null;
+  applyStf();
+  if (settings.polar === CUSTOM_ID) fillCustom();
+  showToast(`Polare: ${polar.def.name}. Flächenbelastung auf ${fmt1(polar.wingLoading)} kg/m² (Bezugsmasse) gesetzt.`);
+});
 const igcAirIn = document.getElementById("igc-air");
 igcAirIn.addEventListener("change", () => {
   settings.igcAir = igcAirIn.checked;
@@ -883,7 +964,9 @@ document.getElementById("open-settings").addEventListener("click", () => {
   asSoundIn.checked = settings.asAlertSound;
   asTraIn.checked = settings.asTraActive;
   for (const cb of asCatsEl.querySelectorAll("input")) cb.checked = settings.asWarnCats.includes(cb.value);
-  polarIn.value = settings.polar;
+  polarSearch.value = "";
+  fillPolarList();
+  if (settings.polar === CUSTOM_ID) fillCustom();
   stfToneIn.checked = settings.stfTone;
   igcAirIn.checked = settings.igcAir;
   showPolarInfo();

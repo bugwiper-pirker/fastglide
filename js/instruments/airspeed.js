@@ -8,12 +8,13 @@ export function createAirspeed(svg, cfg) {
 
   createDial(svg);
 
-  // Farbbögen gemäß Flughandbuch
-  el("path", { d: arcPath(84, ang(cfg.whiteArc[0]), ang(cfg.whiteArc[1])), class: "arc-white" }, svg);
-  el("path", { d: arcPath(88.5, ang(cfg.greenArc[0]), ang(cfg.greenArc[1])), class: "arc-green" }, svg);
-  el("path", { d: arcPath(88.5, ang(cfg.yellowArc[0]), ang(cfg.yellowArc[1])), class: "arc-yellow" }, svg);
-  radialLine(svg, 91, 72, ang(cfg.redLine), { class: "mark-red" });
-  radialLine(svg, 91, 76, ang(cfg.blueLine), { class: "mark-blue" });
+  // Farbbögen gemäß Flughandbuch (nur was bekannt ist)
+  if (cfg.whiteArc) el("path", { d: arcPath(84, ang(cfg.whiteArc[0]), ang(cfg.whiteArc[1])), class: "arc-white" }, svg);
+  if (cfg.greenArc) el("path", { d: arcPath(88.5, ang(cfg.greenArc[0]), ang(cfg.greenArc[1])), class: "arc-green" }, svg);
+  if (cfg.yellowArc) el("path", { d: arcPath(88.5, ang(cfg.yellowArc[0]), ang(cfg.yellowArc[1])), class: "arc-yellow" }, svg);
+  if (cfg.redLine) radialLine(svg, 91, 72, ang(cfg.redLine), { class: "mark-red" });
+  if (cfg.blueLine) radialLine(svg, 91, 76, ang(cfg.blueLine), { class: "mark-blue" });
+  if (cfg.vno) radialLine(svg, 91, 74, ang(cfg.vno), { class: "mark-yellow" });
 
   // Skala
   for (let v = 0; v <= cfg.max; v += 5) {
@@ -28,7 +29,7 @@ export function createAirspeed(svg, cfg) {
   }
 
   // Gelbes Dreieck (Anfluggeschwindigkeit), Spitze zur Skala
-  {
+  if (cfg.yellowTriangle) {
     const a = ang(cfg.yellowTriangle);
     const [tx, ty] = pt(80, a), [b1x, b1y] = pt(91, a - 2.6), [b2x, b2y] = pt(91, a + 2.6);
     el("path", { d: `M${tx} ${ty} L${b1x} ${b1y} L${b2x} ${b2y} Z`, class: "mark-tri" }, svg);

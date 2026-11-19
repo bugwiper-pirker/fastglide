@@ -213,10 +213,30 @@
 
       <fieldset>
         <legend>Sollfahrt und Polare</legend>
-        <label>Polare
+        <label>Flugzeug / Polare
+          <input id="polar-search" type="search" placeholder="Suchen, z. B. Ventus, LS 8, ASK 21" autocomplete="off">
           <select id="polar"></select>
         </label>
         <p class="hint" id="polar-info"></p>
+        <div id="custom-polar" class="custom-polar" hidden>
+          <p class="hint">Eigene Polare: drei Punkte (Fahrt IAS in km/h, Sinken in m/s) bei der Bezugsmasse, z. B. aus dem Flughandbuch.
+            Langsamer Punkt nahe dem geringsten Sinken, mittlerer Punkt um 130 km/h, schneller Punkt um 170–200 km/h.</p>
+          <label>Name <input id="cp-name" type="text" autocomplete="off"></label>
+          <div class="cp-grid">
+            <label>Bezugsmasse (kg) <input id="cp-mass" type="number" inputmode="decimal" step="1"></label>
+            <label>Flügelfläche (m²) <input id="cp-area" type="number" inputmode="decimal" step="0.01"></label>
+            <label>v1 (km/h) <input id="cp-v1" type="number" inputmode="decimal"></label>
+            <label>Sinken 1 (m/s) <input id="cp-s1" type="number" inputmode="decimal" step="0.01"></label>
+            <label>v2 (km/h) <input id="cp-v2" type="number" inputmode="decimal"></label>
+            <label>Sinken 2 (m/s) <input id="cp-s2" type="number" inputmode="decimal" step="0.01"></label>
+            <label>v3 (km/h) <input id="cp-v3" type="number" inputmode="decimal"></label>
+            <label>Sinken 3 (m/s) <input id="cp-s3" type="number" inputmode="decimal" step="0.01"></label>
+            <label>v<sub>NO</sub> (km/h, optional) <input id="cp-vno" type="number" inputmode="decimal"></label>
+            <label>VNE (km/h, optional) <input id="cp-vne" type="number" inputmode="decimal"></label>
+          </div>
+          <button type="button" id="cp-save">Eigene Polare übernehmen</button>
+        </div>
+        <p class="hint">Fahrtmesser: Beim Arcus M die Markierungen aus dem Flughandbuch. Bei anderen Typen nur ein gelber Strich bei v<sub>NO</sub> (Ende des grünen Bogens), soweit bekannt. Bitte den eigenen Fahrtmesser beachten.</p>
         <button type="button" id="open-stf">MC, Flächenbelastung, Mücken …</button>
         <label class="row"><input id="stf-tone" type="checkbox"> Sollfahrtton im Geradeausflug</label>
         <p class="hint">Das Handy misst keine Fahrt durch die Luft. Der Wind wird beim Kreisen (auch bei Wenden am Hang über ⅔ Kreis) aus dem Versatz geschätzt.

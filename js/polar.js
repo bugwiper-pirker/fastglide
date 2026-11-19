@@ -6,19 +6,54 @@
 // Flächenbelastung: Fahrt und Sinken wachsen mit √(W/W₀).
 // Mücken: Die Gleitzahl wird um den Prozentwert schlechter, das Sinken also durch (1 − x) geteilt.
 //
-// Neue Polaren hier eintragen. Später soll man sie in den Einstellungen auswählen können.
+// Auswahl in ⚙ → Sollfahrt und Polare: der Arcus mit den Werten aus dem Flughandbuch,
+// dazu alle Polaren aus XCSoar (js/polars-xcsoar.js) und eine eigene Polare.
+
+import { XCSOAR_POLARS } from "./polars-xcsoar.js";
+
+const ARCUS = {
+  id: "arcus", name: "Arcus / Arcus M",
+  source: "Idaflieg-Messung 2025 (aus XCSoar), Fahrtmesser laut Flughandbuch Arcus M",
+  refMass: 704, area: 15.59, maxMass: 800, vno: 180,
+  points: [[100, 0.6097], [130, 0.7199], [170, 1.2116]],
+  vMin: 80, vMax: 280, // km/h IAS: kleinste sinnvolle Fahrt bei Bezugsmasse, VNE
+  asi: "arcus",        // Markierungen des Fahrtmessers aus js/config.js
+};
 
 export const POLARS = [
-  {
-    id: "arcus", name: "Arcus / Arcus M",
-    source: "Idaflieg-Messung 2025 (aus XCSoar)",
-    refMass: 704, area: 15.59, maxMass: 800,
-    points: [[100, 0.6097], [130, 0.7199], [170, 1.2116]],
-    vMin: 80, vMax: 280, // km/h IAS: kleinste sinnvolle Fahrt bei Bezugsmasse, VNE
-  },
+  ARCUS,
+  ...XCSOAR_POLARS.filter((p) => p.name !== "Arcus").map((p) => ({
+    ...p,
+    id: `x:${p.name}`,
+    source: `XCSoar${p.source ? `, ${p.source.replace(/^from\s+/i, "")}` : ""}`,
+    vMin: Math.min(80, p.points[0][0]),
+    // VNE ist nicht bekannt: Sollfahrt höchstens etwa 1,5 × v_NO
+    vMax: p.vno ? Math.round(p.vno * 1.5) : 250,
+  })).sort((a, b) => a.name.localeCompare(b.name, "de", { numeric: true })),
 ];
 
-export const getPolarDef = (id) => POLARS.find((p) => p.id === id) || POLARS[0];
+export const CUSTOM_ID = "custom";
+
+// Eigene Polare aus den Einstellungen: { name, refMass, area, points: [[v, s] ×3] }
+export function customDef(c) {
+  if (!c || !(c.refMass > 0) || !(c.area > 0) || c.points?.length !== 3) return null;
+  return {
+    id: CUSTOM_ID, name: c.name || "Eigene Polare", source: "eigene Eingabe",
+    refMass: c.refMass, area: c.area, points: c.points,
+    vMin: Math.min(80, c.points[0][0]), vMax: c.vne || 250, vno: c.vno || null,
+  };
+}
+
+export const getPolarDef = (id, custom) =>
+  (id === CUSTOM_ID && customDef(custom)) || POLARS.find((p) => p.id === id) || POLARS[0];
+
+// Prüft, ob die drei Punkte eine brauchbare Polare ergeben
+export function checkPolar(def) {
+  try {
+    const p = makePolar(def, { wingLoading: def.refMass / def.area });
+    return p.bestGlide > 5 && p.bestGlide < 80 && Number.isFinite(p.vBestGlide);
+  } catch { return false; }
+}
 export const refWingLoading = (def) => def.refMass / def.area;
 
 // Parabel durch drei Punkte

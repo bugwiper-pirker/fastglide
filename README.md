@@ -13,7 +13,11 @@ PWA fürs Android-Handy im Segelflugzeug. Zeigt Fahrt, Höhe und Steigen analog 
   - OLC: Strecke über bis zu 6 Schenkel ab Ausklinken bzw. Motor aus bis zur Position. Ø60 = über 6 Schenkel optimierte Strecke innerhalb der letzten Stunde.
   - Aufgabe: geflogene Aufgabenstrecke ab dem Abflug. Ø60 = Zuwachs der Aufgabenstrecke in der letzten Stunde.
   - Die 60-Minuten-Werte erscheinen, sobald eine Stunde Flug (bzw. seit Abflug/Ausklinken) vorliegt.
-- Sollfahrt (MacCready) mit der Polare des Arcus (Idaflieg-Messung 2025, aus XCSoar; weitere Polaren in `js/polar.js`, Auswahl in ⚙). Ein Tippen auf die Anzeige öffnet MC-Wert, Flächenbelastung (kg/m²) und Mücken (% schlechtere Gleitzahl).
+- Sollfahrt (MacCready) mit der Polare des gewählten Flugzeugs. Ein Tippen auf die Anzeige öffnet MC-Wert, Flächenbelastung (kg/m²) und Mücken (% schlechtere Gleitzahl).
+  - Polare wählen in ⚙ → Sollfahrt und Polare, mit Suchfeld (z. B. „ls8“, „ventus 3“). Zur Auswahl stehen der Arcus / Arcus M (Idaflieg-Messung 2025, Fahrtmesser laut Flughandbuch) und 190 weitere Typen aus der Polarliste von XCSoar, jeweils mit Index. Beim Wechsel wird die Flächenbelastung auf die Bezugsmasse der Polare gesetzt. Angezeigt werden Bezugsmasse, Fläche, Wasserballast, Leermasse, v_NO und beste Gleitzahl, soweit bekannt.
+  - Eigene Polare: „Eigene Polare eingeben …“ wählen, Bezugsmasse, Flügelfläche und drei Punkte (Fahrt km/h, Sinken m/s) eintragen, optional v_NO und VNE. Vorbelegt mit der zuletzt gewählten Polare, so lässt sie sich auch nur anpassen.
+  - Fahrtmesser: beim Arcus M die Markierungen aus dem Flughandbuch, bei anderen Typen nur ein gelber Strich bei v_NO (soweit bekannt). Die Sollfahrt ist höchstens VNE (Arcus 280 km/h), bei den XCSoar-Polaren etwa 1,5 × v_NO.
+  - Polarliste aktualisieren: `python3 tools/polars_from_xcsoar.py PolarStore.cpp js/polars-xcsoar.js` (Datei aus dem XCSoar-Quellcode, `src/Polar/PolarStore.cpp`).
   - Wind: beim Kreisen und bei Wenden am Hang (mind. ⅔ Kreis in einer Richtung) aus den Geschwindigkeiten über Grund geschätzt (Kreis durch die Geschwindigkeitsvektoren, Mitte = Wind). Ein Wind älter als 20 Minuten gilt als unbekannt.
   - Mit Wind: Fahrt durch die Luft (TAS, über die Normatmosphäre in IAS umgerechnet), Netto = Gesamtenergie-Steigen (Höhe + TAS²/2g, 6 s geglättet) + Eigensinken laut Polare, Sollfahrt zum Delfinfliegen. Ohne Wind: Sollfahrt für ruhige Luft, verglichen mit der Fahrt über Grund.
   - Pfeil daneben: ▼ = zu langsam, drücken; ▲ = zu schnell, ziehen; ● = passt (±5 km/h). Beim Kreisen kein Pfeil.
@@ -116,6 +120,7 @@ js/audio.js                 Vario-Ton
 js/waypoints.js             Wendepunktdateien (.cup/.cupx) lesen und speichern
 js/finalglide.js            Endanflugrechner und Zielauswahl
 js/polar.js                 Polaren, Sollfahrt und Endanflug nach MacCready
+js/polars-xcsoar.js         Polarliste aus XCSoar (erzeugt mit tools/polars_from_xcsoar.py)
 js/flight.js                Flugauswertung: Kreisen, Wind, IAS, Netto, Ausklinken, freie Strecke
 js/taskspeed.js             Aufgabe verfolgen: Abflug, Wenden, Ziel, Schnitt
 js/map.js                   Kartenseite (Leaflet)
@@ -155,5 +160,7 @@ Die Schrift ist B612 von Airbus, lizenziert unter der SIL Open Font License 1.1.
 Die Kartenbibliothek ist Leaflet (BSD-2-Clause, siehe `vendor/leaflet/LICENSE`). Kartendaten: © OpenStreetMap-Mitwirkende (ODbL), OpenTopoMap (CC-BY-SA).
 
 3D-Ansicht: MapLibre GL JS (BSD-3-Clause, siehe `vendor/maplibre/LICENSE.txt`), three.js (MIT, siehe `vendor/three/LICENSE`). Gelände: AWS Terrain Tiles (Terrarium, aus SRTM, EU-DEM u. a.). Luftbild: Sentinel-2 cloudless by EOX IT Services GmbH (enthält veränderte Copernicus-Sentinel-Daten 2023, CC BY-NC-SA 4.0, nur nicht-kommerziell).
+
+Polaren: aus XCSoar (`src/Polar/PolarStore.cpp`, GPL-2.0-or-later, Copyright The XCSoar Project), die Arcus-Polare aus der Idaflieg-Messung 2025.
 
 Luftraumdaten: Austro Control, erzeugt aus dem AIP Österreich. Ohne Gewähr, nur zur Ergänzung der Flugvorbereitung, kommerzielle Nutzung nicht gestattet (siehe Kopf der Datei).
