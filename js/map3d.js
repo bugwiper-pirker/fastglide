@@ -433,7 +433,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     if (!view || jump) view = { bearing: wantBearing };
     else view.bearing = (view.bearing + angDiff(wantBearing, view.bearing) * Math.min(1, dt * (circling ? 0.8 : 1.5)) + 360) % 360;
     const ease = blend * blend * (3 - 2 * blend);
-    zoomOut = 1 * ease;
+    // schmale Bildschirme (Handy hochkant) brauchen mehr Abstand, damit der Kreis seitlich Platz hat
+    zoomOut = (container.clientWidth < container.clientHeight * 1.2 ? 1.7 : 1.2) * ease;
     const cLat = thermalC ? cur.lat + (thermalC.lat - cur.lat) * ease : cur.lat;
     const cLon = thermalC ? cur.lon + (thermalC.lon - cur.lon) * ease : cur.lon;
     // Flugzeug im unteren Drittel, darüber Gelände und Horizont
