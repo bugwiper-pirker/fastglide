@@ -1,6 +1,8 @@
 // Endanflugrechner: zeigt Ziel, Distanz, Zielhöhe und erforderliche Gleitzahl.
 //
 // Erforderliche Gleitzahl = Distanz / (eigene Höhe − Zielhöhe − Sicherheitshöhe)
+// Hat das Ziel einer Aufgabe eine Mindest-Ankunftshöhe (minAlt, MSL), wird darauf gerechnet,
+// wenn sie höher liegt (darunter gibt es im Wettbewerb Strafpunkte).
 // Ohne Wind und ohne Polare: eine reine geometrische Rechnung.
 
 import { distanceKm, LANDABLE } from "./waypoints.js";
@@ -63,7 +65,8 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     }
     nameEl.textContent = target.name;
     codeEl.textContent = target.code;
-    elevEl.textContent = target.elev == null ? "?" : Math.round(target.elev);
+    const minAlt = target.minAlt ?? null;
+    elevEl.textContent = minAlt != null ? Math.round(minAlt) : target.elev == null ? "?" : Math.round(target.elev);
 
     if (!pos) {
       distEl.textContent = ldEl.textContent = "--";
@@ -74,13 +77,15 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     distEl.textContent = fmtDist(d);
     renderDirection(d);
 
-    if (pos.alt == null || target.elev == null) {
+    if (pos.alt == null || (target.elev == null && minAlt == null)) {
       ldEl.textContent = "--";
-      noteEl.textContent = target.elev == null ? "Zielhöhe fehlt in der Datei" : "Keine GPS-Höhe";
+      noteEl.textContent = pos.alt == null ? "Keine GPS-Höhe" : "Zielhöhe fehlt in der Datei";
       return;
     }
-    const usable = pos.alt - target.elev - s.safetyHeight;
-    const reserve = `inkl. ${s.safetyHeight} m Reserve`;
+    const ground = target.elev == null ? -Infinity : target.elev + s.safetyHeight;
+    const floor = Math.max(ground, minAlt ?? -Infinity);
+    const usable = pos.alt - floor;
+    const reserve = minAlt != null && minAlt >= ground ? `Ankunft mind. ${Math.round(minAlt)} m` : `inkl. ${s.safetyHeight} m Reserve`;
     if (d < 0.3) {
       ldEl.textContent = "--";
       box.dataset.state = "ok";
@@ -157,6 +162,8 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
           Math.abs(x.lat - saved.lat) < 1e-4 && Math.abs(x.lon - saved.lon) < 1e-4) ||
           // Ziel außerhalb der Liste (z. B. Wende aus der Aufgabe)
           (saved.elev !== undefined ? { style: 0, ...saved } : null);
+        // Mindest-Ankunftshöhe gehört zur Aufgabe, nicht zum Wendepunkt
+        if (target && saved.minAlt != null) target = { ...target, minAlt: saved.minAlt };
       }
       render();
     },
@@ -164,7 +171,7 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     // beliebigen Punkt als Ziel (z. B. Wende aus der Aufgabe)
     selectPoint(p) {
       target = p || null;
-      onSelect(target ? { name: target.name, code: target.code, lat: target.lat, lon: target.lon, elev: target.elev } : null);
+      onSelect(target ? { name: target.name, code: target.code, lat: target.lat, lon: target.lon, elev: target.elev, minAlt: target.minAlt ?? null } : null);
       render();
     },
     render,

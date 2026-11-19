@@ -153,6 +153,78 @@ export function parseXcsoarTask(text) {
   return finishTask({ name: "XCSoar-Aufgabe", aat: type === "AAT", taskTime: minT ? hh(minT) : null, points: pts });
 }
 
+// ---------------- IGC (im Logger erklärte Aufgabe) ----------------
+//   C060725095746000000000304            Kopf: …, zuletzt Zahl der Wenden (04)
+//   C0000000N00000000E                   Abflugort (oft leer)
+//   C4624167N01415083E010 Huje           Start, Wenden …, Ziel
+//   C0000000N00000000E                   Landeort (oft leer)
+// Zonen, falls vorhanden: LLXVOZ=-1,Style=2,R1=5000m,… (LXNAV, -1 = Start) oder LSEEYOU OZ=0,… (0 = Start)
+//   LLXVTSK,TaskTime=10800s              AAT-Mindestzeit
+export function parseIgcTask(text) {
+  const lines = text.split(/\r?\n/);
+  const head = lines.find((l) => /^C\d{23}/.test(l));
+  if (!head) return null;
+  const nTp = Number(head.slice(23, 25));
+  const all = lines
+    .map((l) => /^C(\d{7}[NS])(\d{8}[EW])(.*)$/.exec(l))
+    .filter(Boolean)
+    .map((m) => {
+      const lat = (Number(m[1].slice(0, 2)) + Number(m[1].slice(2, 7)) / 60000) * (m[1][7] === "S" ? -1 : 1);
+      const lon = (Number(m[2].slice(0, 3)) + Number(m[2].slice(3, 8)) / 60000) * (m[2][8] === "W" ? -1 : 1);
+      return { name: m[3].trim(), lat, lon };
+    });
+  // Normal: Abflug, Start, Wenden, Ziel, Landung. Abflug und Landung weglassen.
+  let pts = all.length >= nTp + 4 ? all.slice(1, nTp + 3) : all;
+  pts = pts.filter((p) => p.lat || p.lon);
+  if (pts.length < 2) return null;
+
+  const zones = [];
+  for (const l of lines) {
+    const m = /^L(?:LXV|SEEYOU )OZ=(-?\d+),(.*)$/.exec(l);
+    if (!m) continue;
+    const o = {};
+    for (const kv of m[2].split(",")) {
+      const [k, v] = kv.split("=");
+      if (k) o[k.trim().toLowerCase()] = (v || "").trim();
+    }
+    zones.push({
+      style: o.style != null ? Number(o.style) : 1,
+      r1: parseDist(o.r1) ?? 500,
+      a1: o.a1 != null && o.a1 !== "" ? Number(o.a1) : 180,
+      r2: parseDist(o.r2) ?? 0,
+      a2: o.a2 != null && o.a2 !== "" ? Number(o.a2) : 0,
+      a12: o.a12 != null && o.a12 !== "" ? Number(o.a12) : null,
+      line: o.line === "1" || /true/i.test(o.line || ""),
+      // beim Ziel: Mindest-Ankunftshöhe (MSL), darunter gibt es Strafpunkte
+      minAlt: o.elev ? parseElev(o.elev) : null,
+    });
+  }
+  const useZones = zones.length === pts.length;
+  for (const z of zones.slice(0, -1)) delete z.minAlt;
+
+  const tm = /^L(?:LXVTSK|SEEYOU TSK).*TaskTime=(\d+)(s)?/m.exec(text);
+  let taskTime = null;
+  if (tm) {
+    const s = Number(tm[1]);
+    if (s > 0) taskTime = `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:00`;
+  }
+  const facts = [["Quelle", "Im Logger erklärte Aufgabe (IGC)"]];
+  if (taskTime) facts.push(["Mindestzeit", `${taskTime.slice(0, 5)} h`]);
+  if (!useZones) facts.push(["Zonen", "nicht in der Datei, Standardwerte"]);
+  const minAlt = useZones ? zones.at(-1).minAlt : null;
+  if (minAlt != null) facts.push(["Zielhöhe (Ankunft mind.)", `${Math.round(minAlt)} m MSL`]);
+  return finishTask({
+    name: "Aufgabe aus IGC",
+    aat: !!taskTime,
+    taskTime,
+    points: pts.map((p, i) => ({
+      ...p, code: "", elev: null, oz: useZones ? zones[i] : defaultOz(i, pts.length),
+      minAlt: i === pts.length - 1 ? minAlt : null,
+    })),
+    info: { facts },
+  });
+}
+
 // ---------------- Soaring Spot (Aufgabenseite) ----------------
 // Die Seite enthält die Aufgabe als JSON: Map.SoaringSpot.taskNormalize({...}).
 // Koordinaten und Winkel in Bogenmaß, Radien in m. oz_radius1 ist bei Linien die halbe Länge.
@@ -362,6 +434,10 @@ export function zoneShapes(task) {
 }
 
 export function zoneText(oz, i, n) {
+  const base = zoneBaseText(oz, i, n);
+  return oz.minAlt != null && i === n - 1 ? `${base} · Ankunft mind. ${Math.round(oz.minAlt)} m` : base;
+}
+function zoneBaseText(oz, i, n) {
   const r = oz.r1 >= 1000 ? `${(oz.r1 / 1000).toLocaleString("de-AT", { maximumFractionDigits: 2 })} km` : `${Math.round(oz.r1)} m`;
   if (oz.line && (i === 0 || i === n - 1)) return `${i === 0 ? "Startlinie" : "Ziellinie"} ${oz.r1 >= 500 ? ((2 * oz.r1) / 1000).toLocaleString("de-AT", { maximumFractionDigits: 2 }) + " km" : Math.round(2 * oz.r1) + " m"}`;
   if (oz.a1 >= 180) return `Zylinder ${r}`;

@@ -8,6 +8,7 @@
 
 import { distanceKm } from "./waypoints.js";
 import { bearingDeg } from "./sources.js";
+import { parseIgcTask } from "./task.js";
 
 export function isIgc(text) { return /^A\w/.test(text) && /^B\d{6}\d{7}[NS]\d{8}[EW]/m.test(text); }
 
@@ -62,12 +63,23 @@ export function parseIgc(text) {
     if (j < fixes.length && fixes[j].t - fixes[i].t >= 30000) { takeoff = i; break; }
   }
 
+  // Erklärte Aufgabe nur übernehmen, wenn der Flug in die Nähe des Starts kommt
+  // (viele Logger haben noch eine alte oder allgemeine Erklärung gespeichert)
+  let task = null;
+  try { task = parseIgcTask(text); } catch {}
+  if (task) {
+    const s = task.points[0];
+    let near = false;
+    for (let i = 0; i < fixes.length && !near; i += 10) near = distanceKm(s.lat, s.lon, fixes[i].lat, fixes[i].lon) < 30;
+    if (!near) task = null;
+  }
+
   const tz = Number((head.TZN || "").replace(/[^-\d.]/g, ""));
   return {
     pilot: head.PLT || head.CM2 || "", glider: [head.GTY, head.GID].filter(Boolean).join(" "), cid: head.CID || "",
     date, tzHours: Number.isFinite(tz) && head.TZN ? tz : null,
     altSource: useGps ? "GPS" : "Druck",
-    fixes, takeoffIndex: takeoff,
+    fixes, takeoffIndex: takeoff, task,
   };
 }
 

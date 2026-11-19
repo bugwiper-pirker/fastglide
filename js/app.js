@@ -831,6 +831,14 @@ function startReplay(flight, name) {
   const { offset, field } = replayAltOffset(flight);
   replayFlight = flight;
   replayEl.hidden = false;
+  // Aufgabe aus der Datei nur fürs Abspielen verwenden, nicht speichern
+  if (flight.task) {
+    task = flight.task;
+    settings.showTask = true;
+    mapView?.setTask(task);
+    mapView?.setLayerVisible("task", true);
+    updateLayerUi();
+  }
   if (dlg.open) dlg.close();
   showPage("map");
   mapView?.setFlight(flight.fixes.map((f) => [f.lat, f.lon]));
@@ -839,16 +847,24 @@ function startReplay(flight, name) {
   replay.play();
   const h = Math.round((flight.fixes.at(-1).t - flight.fixes[flight.takeoffIndex].t) / 60000);
   showToast(`Flug „${name}“ geladen (${Math.floor(h / 60)}:${String(h % 60).padStart(2, "0")} h). ` +
-    (field ? `Höhe auf ${field.name} (${Math.round(field.elev)} m) abgeglichen.` : `${flight.altSource}-Höhe aus der Datei, ohne Abgleich.`));
+    (field ? `Höhe auf ${field.name} (${Math.round(field.elev)} m) abgeglichen.` : `${flight.altSource}-Höhe aus der Datei, ohne Abgleich.`) +
+    (flight.task ? ` Aufgabe aus der Datei: ${flight.task.points.length - 2} Wenden, ${Math.round(flight.task.distanceKm)} km.` : ""));
 }
 
 function stopReplay() {
   if (!replay) return;
   replay.stop();
+  const replayTask = replayFlight?.task;
   replay = null;
   replayFlight = null;
   replayEl.hidden = true;
   mapView?.setFlight(null);
+  // wieder die gespeicherte Aufgabe
+  if (task && task === replayTask) {
+    task = loadTask()?.task || null;
+    mapView?.setTask(task);
+    updateLayerUi();
+  }
 }
 document.getElementById("rp-close").addEventListener("click", () => startSource());
 rpEls.speed.addEventListener("change", () => { if (last?.replay) setStatus("ok", `FLUG ${replay?.speed ?? ""}×`); });
