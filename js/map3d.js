@@ -253,7 +253,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
         "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.4,
       },
     },
-    center: [14.5, 47.5], zoom: 10, pitch: 70, maxPitch: 85, elevation: 3000,
+    center: [14.5, 47.5], zoom: 10, pitch: 70, maxPitch: 100, elevation: 3000,
     centerClampedToGround: false,
     attributionControl: { compact: true },
     // Kantenglättung, sonst wirkt das Flugzeug von nah ausgefranst
@@ -275,7 +275,11 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   let zoomOut = 0;                 // beim Kreisen weiter weg (Zoomstufen)
   // Kamera um das Flugzeug: Drehung gegenüber „von hinten“, Neigung, Zoom
   const PITCH = 78, ZOOM = 16;
+  // Cockpitansicht: Kamera auf Augenhöhe im Flugzeug, Blick knapp unter den Horizont, Querlage als Rollen
+  const CK_PITCH = 86;
+  let cockpit = false, roll = 0;
   let bearingOffset = 0, viewPitch = PITCH, zoom = ZOOM;
+  const basePitch = () => (cockpit ? CK_PITCH : PITCH);
   let flight = null, task = null, spaces = [];
   const vis = { airspace: true, task: true };
   function applyVisibility() {
@@ -288,10 +292,10 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   function viewChanged() {
     const off = ((bearingOffset % 360) + 540) % 360 - 180; // −180 … 180
-    followBtn.hidden = Math.abs(off) < 1 && Math.abs(viewPitch - PITCH) < 1 && Math.abs(zoom - ZOOM) < 0.05;
+    followBtn.hidden = Math.abs(off) < 1 && Math.abs(viewPitch - basePitch()) < 1 && (cockpit || Math.abs(zoom - ZOOM) < 0.05);
   }
   followBtn.title = "Ansicht zurücksetzen (von hinten)";
-  followBtn.addEventListener("click", () => { bearingOffset = 0; viewPitch = PITCH; zoom = ZOOM; viewChanged(); });
+  followBtn.addEventListener("click", () => { bearingOffset = 0; viewPitch = basePitch(); zoom = ZOOM; viewChanged(); });
 
   // Ziehen: um das Flugzeug drehen (waagrecht) und neigen (senkrecht).
   // Zwei Finger: zoomen und drehen. Mausrad und +/−: zoomen.
@@ -312,7 +316,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     p.x = e.clientX; p.y = e.clientY;
     if (ptrs.size === 1) {
       bearingOffset -= dx * 0.35;
-      viewPitch = clamp(viewPitch - dy * 0.25, 0, 85);
+      // im Cockpit: umschauen (zur Seite, hinauf und hinunter)
+      viewPitch = cockpit ? clamp(viewPitch - dy * 0.15, 40, 100) : clamp(viewPitch - dy * 0.25, 0, 85);
     } else if (pinch && ptrs.size === 2) {
       const t = two();
       zoom = clamp(pinch.zoom + Math.log2(t.d / pinch.d), 9, 19);
@@ -323,8 +328,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; };
   el.addEventListener("pointerup", up);
   el.addEventListener("pointercancel", up);
-  el.addEventListener("wheel", (e) => { e.preventDefault(); zoom = clamp(zoom - e.deltaY * 0.002, 9, 19); viewChanged(); }, { passive: false });
-  el.addEventListener("dblclick", () => { zoom = clamp(zoom + 1, 9, 19); viewChanged(); });
+  el.addEventListener("wheel", (e) => { e.preventDefault(); if (cockpit) return; zoom = clamp(zoom - e.deltaY * 0.002, 9, 19); viewChanged(); }, { passive: false });
+  el.addEventListener("dblclick", () => { if (cockpit) return; zoom = clamp(zoom + 1, 9, 19); viewChanged(); });
   const ctrl = document.createElement("div");
   ctrl.className = "m3-ctrl";
   for (const [txt, d, label] of [["+", 1, "Hineinzoomen"], ["−", -1, "Hinauszoomen"]]) {
@@ -387,7 +392,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
           .multiply(new THREE.Matrix4().makeRotationY(rad(bank)))
           .multiply(new THREE.Matrix4().makeRotationX(Math.atan2(cur.vario || 0, Math.max(10, cur.speed / 3.6)))));
         glider.matrixWorldNeedsUpdate = true;
-        glider.visible = true;
+        glider.visible = !cockpit;
         gliderProj = proj.clone().multiply(place);
       }
       camera.projectionMatrix = proj;
@@ -523,6 +528,16 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = jump ? target[key] : cur[key] + ((target[key] ?? 0) - (cur[key] ?? 0)) * k;
     cur.track = jump ? target.track : (cur.track + angDiff(target.track, cur.track) * k + 360) % 360;
 
+    // Querlage weich nachführen (kommt nur einmal pro Sekunde)
+    roll += (bank - roll) * Math.min(1, dt * 3);
+    if (cockpit) {
+      // Auge etwa 1 m über dem GPS, Blick in Flugrichtung, Horizont kippt mit der Querlage
+      const o = map.calculateCameraOptionsFromCameraLngLatAltRotation([cur.lon, cur.lat], cur.alt + 1,
+        cur.track + bearingOffset, viewPitch, roll);
+      map.jumpTo({ ...o, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+      return;
+    }
+
     // Kamera: geradeaus hinter dem Flugzeug (gedämpft), beim Kreisen fest in die weitere Richtung
     // und auf die Bartmitte, das Flugzeug kreist dann im Bild
     blend = jump ? (circling ? 1 : 0) : clamp(blend + (circling && thermalC ? dt : -dt) / 2.5, 0, 1);
@@ -537,7 +552,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     // Flugzeug im unteren Drittel, darüber Gelände und Horizont
     map.jumpTo({
       // beim Kreisen etwas weiter weg, damit der ganze Kreis ins Bild passt
-      center: [cLon, cLat], elevation: cur.alt, zoom: zoom - zoomOut, bearing: view.bearing + bearingOffset, pitch: viewPitch,
+      center: [cLon, cLat], elevation: cur.alt, zoom: zoom - zoomOut, bearing: view.bearing + bearingOffset, pitch: viewPitch, roll: 0,
       padding: { top: container.clientHeight * 0.3 * (viewPitch / 85), bottom: 0, left: 0, right: 0 },
     });
   }
@@ -597,6 +612,14 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       applyVisibility();
     },
     shown() { map.resize(); },
+    setCockpit(on) {
+      if (cockpit === on) return;
+      cockpit = on;
+      bearingOffset = 0; viewPitch = basePitch();
+      ctrl.classList.toggle("ck-hide", on);
+      view = null; // Außenansicht danach wieder hinter dem Flugzeug beginnen
+      viewChanged();
+    },
     destroy() { cancelAnimationFrame(raf); map.remove(); },
   };
 }

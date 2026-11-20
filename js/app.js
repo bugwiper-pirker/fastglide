@@ -11,6 +11,7 @@ import { startGps, startSimulation, bearingDeg } from "./sources.js";
 import { isIgc, parseIgc } from "./igc.js";
 import { createReplay } from "./replay.js";
 import { createMap3d } from "./map3d.js";
+import { createCockpitPanel, fanout } from "./cockpit.js";
 import { createMapView } from "./map.js";
 import { POLARS, getPolarDef, makePolar, refWingLoading, CUSTOM_ID, customDef, checkPolar } from "./polar.js";
 import { createFlightAnalyzer } from "./flight.js";
@@ -34,11 +35,17 @@ function saveSettings() {
 
 // ---------- Instrumente ----------
 // Neue Instrumente: Datei in js/instruments/ anlegen und hier eintragen.
+// Jedes Instrument gibt es zweimal: auf der Instrumentenseite und im Pilz der Cockpitansicht (3D).
+const cockpitPanel = createCockpitPanel(document.getElementById("cockpit"));
 const instruments = [
   { el: "asi", create: (svg) => createAirspeed(svg, AIRCRAFT.asi), value: (d) => d.airKmh },
   { el: "vario", create: (svg) => createVario(svg, VARIO), value: (d) => d.vario, extra: (d) => ({ avg: d.varioAvg }) },
   { el: "alt", create: (svg) => createAltimeter(svg, ALTIMETER), value: (d) => d.altitude },
-].map((i) => ({ ...i, inst: i.create(document.getElementById(i.el)), shown: null, target: null, extraVal: null }));
+].map((i) => {
+  const o = { ...i, main: i.create(document.getElementById(i.el)), ck: i.create(cockpitPanel.slots[i.el]), shown: null, target: null, extraVal: null };
+  o.inst = fanout(() => [o.main, o.ck]);
+  return o;
+});
 const climb = createClimbCalculator();
 const varioInst = instruments.find((i) => i.el === "vario");
 const audio = createVarioAudio();
@@ -58,9 +65,10 @@ function setupAsi() {
   if (asiFor === key) return;
   asiFor = key;
   const cfg = def.asi === "arcus" ? AIRCRAFT.asi : { max: def.vMax > 285 ? 300 : 285, vno: def.vno || null };
-  const svg = document.getElementById("asi");
-  svg.replaceChildren();
-  asiInst.inst = createAirspeed(svg, cfg);
+  const svg = document.getElementById("asi"), ck = cockpitPanel.slots.asi;
+  svg.replaceChildren(); ck.replaceChildren();
+  asiInst.main = createAirspeed(svg, cfg);
+  asiInst.ck = createAirspeed(ck, cfg);
 }
 setupAsi();
 const analyzer = createFlightAnalyzer();
@@ -190,15 +198,28 @@ async function setView3d(on) {
   tg3d.setAttribute("aria-pressed", on);
   map2dEl.hidden = on;
   map3dEl.hidden = !on;
+  tgCockpit.hidden = !on;
+  cockpitEl.hidden = !(on && settings.cockpit);
   if (on) recenterEl.hidden = true;
   if (!on) { document.getElementById("follow3d").hidden = true; mapView?.shown(); return; }
-  try { (await ensureMap3d()).shown(); }
+  try { const m = await ensureMap3d(); m.setCockpit(!!settings.cockpit); m.shown(); }
   catch (e) {
     showToast(e.message || "Die 3D-Ansicht konnte nicht geladen werden.");
     setView3d(false);
   }
 }
 tg3d.addEventListener("click", () => setView3d(!settings.map3d));
+// Cockpitansicht: Blick aus dem Cockpit, unten der Instrumentenpilz
+const tgCockpit = document.getElementById("tg-cockpit"), cockpitEl = document.getElementById("cockpit");
+function setCockpit(on) {
+  settings.cockpit = on;
+  saveSettings();
+  tgCockpit.setAttribute("aria-pressed", on);
+  cockpitEl.hidden = !(on && settings.map3d);
+  map3d?.setCockpit(on);
+}
+tgCockpit.addEventListener("click", () => setCockpit(!settings.cockpit));
+tgCockpit.setAttribute("aria-pressed", !!settings.cockpit);
 
 function showPage(page) {
   settings.page = page;
