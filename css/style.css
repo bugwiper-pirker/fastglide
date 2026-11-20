@@ -260,7 +260,7 @@ body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-task
 @media (min-width: 1100px) {
   body .app {
     max-width: none;
-    display: grid; grid-template-columns: 230px minmax(0, 1fr) 230px;
+    display: grid; grid-template-columns: 195px minmax(0, 1fr) 195px;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px 10px;
   }
   body .app > * { grid-column: 2; }
@@ -275,11 +275,11 @@ body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-task
   }
   body .digi-l { grid-column: 1; }
   body .digi-r { grid-column: 3; }
-  body .digi .digi-c { display: flex; flex: 1 1 0; max-height: 118px; justify-content: center; padding: 6px 12px; }
+  body .digi .digi-c { display: flex; flex: 1 1 0; max-height: 118px; justify-content: center; padding: 6px 10px; }
   body:not(.has-task) .digi .d-task { display: none; }
   body .digi-c .fg-k { font-size: .7rem; }
   body .digi-n b { font-size: 1.6rem; }
-  body .digi-s { font-size: .92rem; }
+  body .digi-s { font-size: .84rem; }
 }
 body.stale .digi-n b { color: var(--red); }
 
