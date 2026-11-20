@@ -220,7 +220,7 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
 }
 /* Digitale Anzeigen: oben über dem Endanflug, beide Gruppen (links Flugzustand, rechts Wind,
    Strecke, Schnitt) in einem Raster. Auf der Instrumentenseite nur Sollfahrt, Wind, Bart/Gleiten und Schnitt.
-   Breite Kartenseite (ab 1100 px): die Gruppen stehen als Spalten links und rechts neben der Karte. */
+   Breite Bildschirme (ab 1100 px): die Gruppen stehen als Spalten links und rechts (Karten- und Instrumentenseite). */
 .digi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .digi-l, .digi-r { display: contents; }
 body:not(.has-task) .d-olc, body:not(.has-task) .d-olcv { grid-column: span 2; }
@@ -255,27 +255,31 @@ body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-task
 }
 @media (max-width: 440px) { .digi-n .u { display: none; } }
 @media (max-width: 400px) { .digi-n b { font-size: 1.1rem; } .digi-s { font-size: .62rem; } }
+/* Breite Bildschirme: Spalten links und rechts, in der Mitte Endanflug und darunter Karte bzw. Instrumente.
+   Auf beiden Seiten alle Anzeigen (auch auf der Instrumentenseite). */
 @media (min-width: 1100px) {
-  body.map-page .app {
+  body .app {
+    max-width: none;
     display: grid; grid-template-columns: 230px minmax(0, 1fr) 230px;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px 10px;
   }
-  body.map-page .app > * { grid-column: 2; }
-  body.map-page .app > header { grid-column: 1 / -1; grid-row: 1; }
-  body.map-page .aswarn { grid-row: 2; }
-  body.map-page .fg { grid-row: 3; }
-  body.map-page .mapview { grid-row: 4; }
-  body.map-page .replay { grid-row: 5; }
-  body.map-page .digi { display: contents; }
-  body.map-page .digi-l, body.map-page .digi-r {
+  body .app > * { grid-column: 2; }
+  body .app > header { grid-column: 1 / -1; grid-row: 1; }
+  body .aswarn { grid-row: 2; }
+  body .fg { grid-row: 3; }
+  body .mapview, body .gauges { grid-row: 4; }
+  body .replay { grid-row: 5; }
+  body .digi { display: contents; }
+  body .digi-l, body .digi-r {
     display: flex; flex-direction: column; gap: 8px; grid-row: 2 / -1; min-height: 0; overflow-y: auto;
   }
-  body.map-page .digi-l { grid-column: 1; }
-  body.map-page .digi-r { grid-column: 3; }
-  body.map-page .digi-c { flex: 1 1 0; max-height: 118px; justify-content: center; padding: 6px 12px; }
-  body.map-page .digi-c .fg-k { font-size: .7rem; }
-  body.map-page .digi-n b { font-size: 1.6rem; }
-  body.map-page .digi-s { font-size: .92rem; }
+  body .digi-l { grid-column: 1; }
+  body .digi-r { grid-column: 3; }
+  body .digi .digi-c { display: flex; flex: 1 1 0; max-height: 118px; justify-content: center; padding: 6px 12px; }
+  body:not(.has-task) .digi .d-task { display: none; }
+  body .digi-c .fg-k { font-size: .7rem; }
+  body .digi-n b { font-size: 1.6rem; }
+  body .digi-s { font-size: .92rem; }
 }
 body.stale .digi-n b { color: var(--red); }
 

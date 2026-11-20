@@ -506,7 +506,7 @@ function frame() {
   }
   audio.setValue(stale ? null : varioInst.target);
   if (stale) audio.setStf(null);
-  if (settings.page === "map") updateDigital();
+  updateDigital(); // auch auf der Instrumentenseite (Seitenspalten auf breiten Bildschirmen)
   if (frameCount++ % 10 === 0) renderPerf();
   requestAnimationFrame(frame);
 }
