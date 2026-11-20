@@ -218,42 +218,65 @@ input[type="file"] { font: inherit; font-size: .85rem; color: var(--ink); }
   font-size: 1.5rem; min-width: 48px; min-height: 48px; border-radius: 50%;
   background: var(--accent); color: #111; box-shadow: 0 2px 8px rgb(0 0 0 / .35);
 }
-/* Digitale Anzeigen: oben über dem Endanflug. Auf der Instrumentenseite nur Sollfahrt, Wind und Schnitt. */
+/* Digitale Anzeigen: oben über dem Endanflug, beide Gruppen (links Flugzustand, rechts Wind,
+   Strecke, Schnitt) in einem Raster. Auf der Instrumentenseite nur Sollfahrt, Wind, Bart/Gleiten und Schnitt.
+   Breite Kartenseite (ab 1100 px): die Gruppen stehen als Spalten links und rechts neben der Karte. */
 .digi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-.d-taskv { grid-column: span 2; }
-body:not(.has-task) .d-dist, body:not(.has-task) .d-olc, body:not(.has-task) .d-olcv { grid-column: span 2; }
+.digi-l, .digi-r { display: contents; }
+body:not(.has-task) .d-olc, body:not(.has-task) .d-olcv { grid-column: span 2; }
 .d-phase[data-mode="thermal"] .digi-n b { color: var(--green); }
 .d-phase[data-mode="thermal"][data-sink] .digi-n b { color: var(--red); }
 .digi-c { background: var(--face); border: 1px solid var(--bezel); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 0; }
 button.digi-c { font: inherit; color: inherit; text-align: left; min-height: 0; cursor: pointer; }
 .digi-c .fg-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* antippen wechselt obere und untere Anzeige */
+.d-swap .fg-k::after { content: " ⇅"; opacity: .45; }
 .digi-n { font-family: var(--font-num); font-size: .78rem; color: var(--muted); white-space: nowrap; display: flex; align-items: baseline; gap: 4px; overflow: hidden; }
-.digi-n b { font-size: 1.9rem; color: var(--ink); line-height: 1.1; }
+.digi-n b { font-size: 1.7rem; color: var(--ink); line-height: 1.1; }
 .digi-n .u { font-size: inherit; }
-.digi-s { font-family: var(--font-num); font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.digi-s { font-family: var(--font-num); font-size: .84rem; color: color-mix(in srgb, var(--ink) 65%, var(--muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stf-cmd { font-style: normal; font-weight: 700; font-size: 1.05rem; color: var(--accent); margin-left: auto; }
 .stf-cmd[data-dir="push"] { color: var(--blue); }
 .wind-arr { font-style: normal; font-weight: 700; font-size: 1.2rem; color: var(--accent); display: inline-block; align-self: center; transition: transform .6s ease-out; }
 .wind-arr[data-off] { opacity: .2; }
 body:not(.has-task) .d-task { display: none; }
 body:not(.map-page) .digi { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-body:not(.map-page) .digi > * { display: none; grid-column: auto; }
+body:not(.map-page) .digi-c { display: none; grid-column: auto; }
 body:not(.map-page) .d-stf, body:not(.map-page) .d-windt, body:not(.map-page) .d-phase,
 body:not(.map-page):not(.has-task) .d-olcv, body:not(.map-page).has-task .d-taskv { display: flex; }
 @media (max-width: 700px) {
   body.map-page .digi { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
-  body.map-page .digi > * { grid-column: auto; }
-  body.map-page .d-taskv { grid-column: span 2; }
-  body.map-page:not(.has-task) .d-olcv { grid-column: span 4; }
   .digi-c { padding: 3px 6px; border-radius: 8px; }
   .digi-c .fg-k { font-size: .56rem; letter-spacing: .04em; }
   .digi-n { font-size: .66rem; gap: 2px; }
-  .digi-n b { font-size: 1.3rem; }
-  .digi-s { font-size: .62rem; }
+  .digi-n b { font-size: 1.2rem; }
+  .digi-s { font-size: .68rem; }
   .stf-cmd { font-size: .85rem; }
 }
 @media (max-width: 440px) { .digi-n .u { display: none; } }
-@media (max-width: 400px) { .digi-n b { font-size: 1.15rem; } .digi-s { font-size: .58rem; } }
+@media (max-width: 400px) { .digi-n b { font-size: 1.1rem; } .digi-s { font-size: .62rem; } }
+@media (min-width: 1100px) {
+  body.map-page .app {
+    display: grid; grid-template-columns: 230px minmax(0, 1fr) 230px;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px 10px;
+  }
+  body.map-page .app > * { grid-column: 2; }
+  body.map-page .app > header { grid-column: 1 / -1; grid-row: 1; }
+  body.map-page .aswarn { grid-row: 2; }
+  body.map-page .fg { grid-row: 3; }
+  body.map-page .mapview { grid-row: 4; }
+  body.map-page .replay { grid-row: 5; }
+  body.map-page .digi { display: contents; }
+  body.map-page .digi-l, body.map-page .digi-r {
+    display: flex; flex-direction: column; gap: 8px; grid-row: 2 / -1; min-height: 0; overflow-y: auto;
+  }
+  body.map-page .digi-l { grid-column: 1; }
+  body.map-page .digi-r { grid-column: 3; }
+  body.map-page .digi-c { flex: 1 1 0; max-height: 118px; justify-content: center; padding: 6px 12px; }
+  body.map-page .digi-c .fg-k { font-size: .7rem; }
+  body.map-page .digi-n b { font-size: 1.6rem; }
+  body.map-page .digi-s { font-size: .92rem; }
+}
 body.stale .digi-n b { color: var(--red); }
 
 /* Flugzeugsymbol */
@@ -336,3 +359,11 @@ input[type="text"] { font: inherit; font-size: 1rem; padding: 8px 10px; border-r
 .stepper button { font-size: 1.5rem; min-height: 48px; padding: 0; }
 .stepper input { text-align: center; width: 100%; }
 .fg-arr b { min-width: 3ch; display: inline-block; text-align: right; }
+/* Endanflug: MC (antippen zum Einstellen) und Sollfahrt zum Ziel */
+.fg-mc { cursor: pointer; border-radius: 6px; }
+.fg-mc:focus-visible { outline: 2px solid var(--accent); }
+.fg-mc b, .fg-stf b { color: var(--accent); }
+@media (max-width: 640px) { .fg-vals { gap: 6px; } .fg-v .fg-k { white-space: nowrap; } }
+.d-short { display: none; }
+@media (max-width: 700px) { .d-long { display: none; } .d-short { display: inline; } }
+@media (max-width: 480px) { .fg-n b { font-size: 1.15rem; } .fg-n { font-size: .62rem; } .fg-dir { width: 40px; } .fg-dir svg { width: 32px; height: 32px; } }

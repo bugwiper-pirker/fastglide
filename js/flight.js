@@ -228,8 +228,11 @@ export function createFlightAnalyzer() {
   // Bart (beim Kreisen) und Gleitflug (dazwischen): Beginn mit Zeit, Ort und Höhe
   function updatePhase(f) {
     if (f.alt == null) return;
-    s.recent.push({ t: f.t, lat: f.lat, lon: f.lon, alt: f.alt });
-    while (s.recent.length && s.recent[0].t < f.t - 90000) s.recent.shift();
+    // mit Strecke entlang der Spur (km) für die Gleitzahl; 150 s reichen für das 2-Minuten-Mittel
+    const lr = s.recent.at(-1);
+    const cum = lr ? lr.cum + chordKm(vec(lr.lat, lr.lon), vec(f.lat, f.lon)) : 0;
+    s.recent.push({ t: f.t, lat: f.lat, lon: f.lon, alt: f.alt, cum });
+    while (s.recent.length && s.recent[0].t < f.t - 150000) s.recent.shift();
     const at = (t) => s.recent.find((x) => x.t >= t) || s.recent[0];
     if (s.circling) {
       if (!s.thermal) { s.thermal = { ...at(s.turnStart) }; s.seg = null; }
@@ -323,6 +326,17 @@ export function createFlightAnalyzer() {
         };
       }
       return null;
+    },
+    // Gleitzahl über Grund der letzten sec Sekunden: Strecke entlang der Spur / Höhenverlust.
+    // null beim Kreisen oder wenn der Verlauf noch nicht so weit zurückreicht; ld = Infinity ohne Höhenverlust
+    glideRatio(sec) {
+      const p = s.recent.at(-1);
+      if (!p || s.circling || !s.airborne) return null;
+      const a = s.recent.find((x) => x.t >= p.t - sec * 1000);
+      if (!a || p.t - a.t < sec * 800) return null;
+      const km = p.cum - a.cum, lost = a.alt - p.alt;
+      if (km < 0.05) return null;
+      return { ld: lost > 1 ? (km * 1000) / lost : Infinity, km, lost };
     },
     // geflogene Strecke seit dem Abheben, dazu Schnitt der letzten 60 min entlang der Spur
     flown() {

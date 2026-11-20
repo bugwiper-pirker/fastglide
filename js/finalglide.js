@@ -4,6 +4,8 @@
 // Hat das Ziel einer Aufgabe eine Mindest-Ankunftshöhe (minAlt, MSL), wird darauf gerechnet,
 // wenn sie höher liegt (darunter gibt es im Wettbewerb Strafpunkte).
 // Ankunft: nach MacCready mit Polare, MC-Wert und Gegen-/Rückenwind (sobald geschätzt).
+// Dazu MC und die Sollfahrt für den Endanflug (beste Fahrt zum Ziel bei MC und Wind); Antippen von MC
+// öffnet die Einstellung von MC, Flächenbelastung und Mücken.
 
 import { distanceKm, LANDABLE } from "./waypoints.js";
 import { bearingDeg } from "./sources.js";
@@ -12,10 +14,14 @@ const fmtDist = (km) => (km < 10 ? km.toFixed(1) : Math.round(km).toString());
 const fmtSigned = (m) => (m > 0.5 ? "+" : m < -0.5 ? "−" : "") + Math.abs(Math.round(m));
 const fmtMc = (v) => v.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-export function createFinalGlide({ box, picker, getSettings, onSelect }) {
+export function createFinalGlide({ box, picker, getSettings, onSelect, onMc }) {
   const $ = (sel) => box.querySelector(sel);
   const nameEl = $(".fg-name"), codeEl = $(".fg-code");
   const distEl = $("#fg-dist"), ldEl = $("#fg-ld"), elevEl = $("#fg-arr"), noteEl = $(".fg-note");
+  const mcEl = $("#fg-mc"), stfEl = $("#fg-stf"), mcBox = $(".fg-mc");
+  const mcOpen = (e) => { e.stopPropagation(); onMc?.(); };
+  mcBox.addEventListener("click", mcOpen);
+  mcBox.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); mcOpen(e); } });
   const dirEl = $(".fg-dir"), arrowEl = $(".fg-arrow"), turnEl = $(".fg-turn");
   let arrowAngle = 0; // aktuell gezeichneter Winkel (fortlaufend, ohne Sprung bei 360°)
 
@@ -50,6 +56,8 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
   function render() {
     const s = getSettings();
     box.dataset.state = "none";
+    mcEl.textContent = fmtMc(s.mc);
+    stfEl.textContent = "--";
     if (!target || !pos) renderDirection(Infinity);
     if (!points.length) {
       nameEl.textContent = "Endanflug";
@@ -103,9 +111,10 @@ export function createFinalGlide({ box, picker, getSettings, onSelect }) {
     const need = (ld) => (ld > 0 ? (d * 1000) / ld : Infinity);
     const arrival = usable - need(g.ld), arrival0 = usable - need(g0.ld);
     elevEl.textContent = Number.isFinite(arrival) ? fmtSigned(arrival) : "−∞";
+    stfEl.textContent = Math.round(g.v * 3.6);
     box.dataset.state = arrival >= 0 ? "ok" : arrival0 >= 0 ? "warn" : "bad";
     const windTxt = Math.abs(hw) * 3.6 >= 3 ? ` · ${hw > 0 ? "Gegen" : "Rücken"}wind ${Math.round(Math.abs(hw) * 3.6)}` : w ? "" : " · ohne Wind";
-    noteEl.textContent = `${reserve} · MC ${fmtMc(s.mc)} → ${Math.round(g.v * 3.6)} km/h${windTxt}` +
+    noteEl.textContent = `${reserve}${windTxt}` +
       (arrival < 0 && arrival0 >= 0 ? ` · mit MC 0: ${fmtSigned(arrival0)} m` : "");
   }
 

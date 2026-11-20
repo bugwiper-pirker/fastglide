@@ -33,13 +33,19 @@
     </div>
 
     <section class="digi" aria-label="Digitale Anzeigen">
-      <div class="digi-c d-full"><span class="fg-k" id="d-spd-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b><small class="u">km/h</small></span><span class="digi-s" id="d-spd-s">---</span></div>
-      <div class="digi-c d-full"><span class="fg-k">Höhe</span><span class="digi-n"><b id="d-alt">-----</b><small class="u">m</small></span><span class="digi-s" id="d-altft">---- ft · FL ---</span></div>
-      <div class="digi-c d-full"><span class="fg-k">Vario</span><span class="digi-n"><b id="d-var">---</b><small class="u">m/s</small></span><span class="digi-s" id="d-avg">Ø ---</span></div>
-      <div class="digi-c d-phase" aria-live="off"><span class="fg-k" id="d-ph-k">Bart / Gleiten</span><span class="digi-n"><b id="d-ph">---</b><small class="u" id="d-ph-u"></small></span><span class="digi-s" id="d-ph-s">---</span></div>
+      <!-- Links: Flugzustand (antippen wechselt obere und untere Anzeige), rechts: Wind, Strecke, Schnitt.
+           Auf schmalen Bildschirmen stehen beide Gruppen zusammen als Raster über Endanflug und Karte. -->
+      <div class="digi-l">
+      <button type="button" class="digi-c d-full d-swap" data-swap="spd" aria-label="Fahrt, tippen zum Wechseln"><span class="fg-k" id="d-spd-k">Fahrt GS</span><span class="digi-n"><b id="d-spd">---</b><small class="u">km/h</small></span><span class="digi-s" id="d-spd-s">---</span></button>
+      <button type="button" class="digi-c d-full d-swap" data-swap="alt" aria-label="Höhe, tippen zum Wechseln"><span class="fg-k">Höhe</span><span class="digi-n"><b id="d-alt">-----</b><small class="u" id="d-alt-u">m</small></span><span class="digi-s" id="d-altft">---- ft · FL ---</span></button>
+      <button type="button" class="digi-c d-full d-swap" data-swap="var" aria-label="Vario, tippen zum Wechseln"><span class="fg-k" id="d-var-k">Vario</span><span class="digi-n"><b id="d-var">---</b><small class="u">m/s</small></span><span class="digi-s" id="d-avg">Ø ---</span></button>
+      <button type="button" class="digi-c d-phase d-swap" data-swap="ph" aria-label="Bart oder Gleitflug, tippen zum Wechseln" aria-live="off"><span class="fg-k" id="d-ph-k">Bart / Gleiten</span><span class="digi-n"><b id="d-ph">---</b><small class="u" id="d-ph-u"></small></span><span class="digi-s" id="d-ph-s">---</span></button>
       <button type="button" class="digi-c d-stf" id="d-stf-box" aria-label="Sollfahrt, tippen für MC, Flächenbelastung und Mücken">
         <span class="fg-k">Sollfahrt</span><span class="digi-n"><b id="d-stf">---</b><small class="u">km/h</small> <i id="d-stf-cmd" class="stf-cmd"></i></span><span class="digi-s" id="d-stf-s">MC ---</span>
       </button>
+      <button type="button" class="digi-c d-full d-ld d-swap" data-swap="ld" aria-label="Gleitzahl über Grund, tippen zum Wechseln"><span class="fg-k" id="d-ld-k">Gleitzahl 30 s</span><span class="digi-n"><b id="d-ld">---</b></span><span class="digi-s" id="d-ld-s">Ø 2 min ---</span></button>
+      </div>
+      <div class="digi-r">
       <button type="button" class="digi-c d-windt" id="d-wind-box" aria-label="Wind, tippen für Details">
         <span class="fg-k" id="d-wind-k">Wind</span><span class="digi-n"><i id="d-wind-arr" class="wind-arr" aria-hidden="true">↓</i><b id="d-wind">--</b><small class="u">km/h</small></span><span class="digi-s" id="d-wind-s">Ø60 ---</span>
       </button>
@@ -58,6 +64,7 @@
       <button type="button" class="digi-c d-task d-taskv" id="d-taskv-box" aria-label="Schnitt Aufgabe, tippen für Details">
         <span class="fg-k">Schnitt Aufgabe</span><span class="digi-n"><b id="d-taskv">---</b><small class="u">km/h</small></span><span class="digi-s" id="d-taskv-s">Ø60 ---</span>
       </button>
+      </div>
     </section>
 
     <section id="fg" class="fg" data-state="none" role="button" tabindex="0" aria-label="Endanflug: Ziel wählen">
@@ -70,6 +77,8 @@
         <div class="fg-v"><span class="fg-k">Distanz</span><span class="fg-n"><b id="fg-dist">--</b> km</span></div>
         <div class="fg-v fg-ld"><span class="fg-k">GZ erf.</span><span class="fg-n"><b id="fg-ld">--</b></span></div>
         <div class="fg-v fg-arr"><span class="fg-k">Ankunft</span><span class="fg-n"><b id="fg-arr">--</b> m</span></div>
+        <div class="fg-v fg-mc" role="button" tabindex="0" title="MC, Flächenbelastung und Mücken einstellen"><span class="fg-k">MC</span><span class="fg-n"><b id="fg-mc">--</b></span></div>
+        <div class="fg-v fg-stf"><span class="fg-k">Sollfahrt</span><span class="fg-n"><b id="fg-stf">--</b> km/h</span></div>
       </div>
       <div class="fg-note">Wendepunktdatei in ⚙ laden</div>
     </section>

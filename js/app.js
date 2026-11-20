@@ -100,6 +100,7 @@ const fg = createFinalGlide({
   picker: document.getElementById("picker"),
   getSettings: () => ({ safetyHeight: settings.safetyHeight, polar, mc: settings.mc, wind: analyzer.wind }),
   onSelect: (t) => { settings.target = t; saveSettings(); mapView?.setTarget(t); },
+  onMc: () => openStf(),
 });
 let waypoints = loadWaypoints()?.points || [];
 let airspaces = loadAirspace()?.spaces || [];
@@ -143,7 +144,22 @@ const digi = {
   avg: document.getElementById("d-avg"),
   alt: document.getElementById("d-alt"),
   altFt: document.getElementById("d-altft"),
+  altU: document.getElementById("d-alt-u"),
+  varK: document.getElementById("d-var-k"),
+  ldK: document.getElementById("d-ld-k"),
+  ld: document.getElementById("d-ld"),
+  ldS: document.getElementById("d-ld-s"),
 };
+// Antippen von Fahrt, Höhe, Vario, Bart/Gleiten und Gleitzahl tauscht obere und untere Anzeige
+const swapped = (k) => !!settings.swap?.[k];
+document.querySelector(".digi").addEventListener("click", (e) => {
+  const b = e.target.closest(".d-swap");
+  if (!b) return;
+  settings.swap = { ...settings.swap, [b.dataset.swap]: !swapped(b.dataset.swap) };
+  saveSettings();
+  updateDigital();
+  renderPerf();
+});
 function ensureMap() {
   if (mapView) return mapView;
   if (!window.L) { showToast("Die Karte konnte nicht geladen werden."); return null; }
@@ -241,12 +257,34 @@ const fmtAlt = (a) => Math.round(a).toLocaleString("de-AT").replace(/[.,\u202f\u
 function updateDigital() {
   const by = (id) => instruments.find((i) => i.el === id).shown;
   const spd = by("asi"), v = by("vario"), alt = by("alt");
-  digi.spd.textContent = spd == null ? "---" : Math.round(spd);
-  digi.var.textContent = v == null ? "---" : fmtVar(v);
-  digi.alt.textContent = alt == null ? "-----" : fmtAlt(alt);
-  digi.altFt.textContent = alt == null ? "---- ft · FL ---" : `${ftText(alt)} · ${flText(alt)}`;
+  // Fahrt: IAS (Logger oder aus Wind) oben, GPS-Fahrt unten – oder getauscht
+  const p = perf, iasName = p?.logger ? "IAS Logger" : "IAS ber.";
+  if (swapped("spd") && p?.ias != null) {
+    digi.spdK.textContent = "Fahrt GS";
+    digi.spd.textContent = p.gs == null ? "---" : Math.round(p.gs);
+    digi.spdS.textContent = spd == null ? "---" : `${iasName.replace(" Logger", "")} ${Math.round(spd)}`;
+  } else {
+    digi.spdK.textContent = p?.ias != null ? iasName : "Fahrt GS";
+    digi.spd.textContent = spd == null ? "---" : Math.round(spd);
+    digi.spdS.textContent = !p || p.gs == null ? "---" : p.ias != null ? `GS ${Math.round(p.gs)}` : "über Grund";
+  }
+  // Höhe: m oder ft oben
+  if (swapped("alt")) {
+    digi.alt.textContent = alt == null ? "-----" : fmtAlt(alt / 0.3048);
+    digi.altU.textContent = "ft";
+    digi.altFt.textContent = alt == null ? "---- m · FL ---" : `${fmtAlt(alt)} m · ${flText(alt)}`;
+  } else {
+    digi.alt.textContent = alt == null ? "-----" : fmtAlt(alt);
+    digi.altU.textContent = "m";
+    digi.altFt.textContent = alt == null ? "---- ft · FL ---" : `${ftText(alt)} · ${flText(alt)}`;
+  }
+  // Vario: aktuell oder Mittel oben
   const avg = varioInst.extraVal?.avg;
-  digi.avg.textContent = avg == null ? "Ø ---" : `Ø ${fmtVar(avg)}`;
+  const vTxt = v == null ? "---" : fmtVar(v), aTxt = avg == null ? "---" : fmtVar(avg);
+  const sw = swapped("var");
+  digi.varK.textContent = sw ? "Vario Ø" : "Vario";
+  digi.var.textContent = sw ? aTxt : vTxt;
+  digi.avg.textContent = sw ? `jetzt ${vTxt}` : `Ø ${aTxt}`;
 }
 
 const fmt1 = (v) => v.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -288,8 +326,6 @@ const avg60 = (v) => `Ø60 ${v == null ? "---" : Math.round(v)}`;
 
 function renderPerf() {
   const p = perf;
-  digi.spdK.textContent = p?.logger ? "IAS Logger" : p?.ias != null ? "IAS ber." : "Fahrt GS";
-  digi.spdS.textContent = !p || p.gs == null ? "---" : p.ias != null ? `GS ${Math.round(p.gs)}` : "über Grund";
 
   // Wind: aktuell groß, darunter das Mittel der letzten 60 min
   const w = p?.wind, w60 = analyzer.wind60();
@@ -302,23 +338,37 @@ function renderPerf() {
   const ph = analyzer.phase();
   const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
   digi.phBox.dataset.mode = ph?.mode || "";
+  const swPh = swapped("ph");
   if (ph?.mode === "thermal") {
-    digi.phK.textContent = "Bartsteigen";
-    digi.ph.textContent = ph.climb == null ? "---" : fmtVar(ph.climb);
-    digi.phU.textContent = "m/s";
+    const climbTxt = ph.climb == null ? "---" : fmtVar(ph.climb);
+    const gainTxt = `${ph.gain >= 0 ? "+" : "−"}${Math.abs(Math.round(ph.gain))}`;
+    digi.phK.textContent = swPh ? "Bart Gewinn" : "Bartsteigen";
+    digi.ph.textContent = swPh ? gainTxt : climbTxt;
+    digi.phU.textContent = swPh ? "m" : "m/s";
     if (ph.climb < 0) digi.phBox.dataset.sink = ""; else delete digi.phBox.dataset.sink;
-    digi.phS.textContent = `${mmss(ph.sec)} · ${ph.gain >= 0 ? "+" : "−"}${Math.abs(Math.round(ph.gain))} m`;
+    digi.phS.textContent = `${mmss(ph.sec)} · ${swPh ? `${climbTxt} m/s` : `${gainTxt} m`}`;
   } else if (ph?.mode === "glide") {
-    digi.phK.textContent = "Gleitflug";
-    digi.ph.textContent = fmt1(ph.km);
-    digi.phU.textContent = "km";
-    digi.phS.textContent = `${ph.speed == null ? "--" : Math.round(ph.speed)} km/h · GZ ${ph.ld == null || ph.ld > 200 ? "--" : Math.round(ph.ld)}`;
+    const spdTxt = ph.speed == null ? "--" : Math.round(ph.speed);
+    const ldTxt = `GZ ${ph.ld == null || ph.ld > 200 ? "--" : Math.round(ph.ld)}`;
+    digi.phK.textContent = swPh ? "Gleitflug Schnitt" : "Gleitflug";
+    digi.ph.textContent = swPh ? spdTxt : fmt1(ph.km);
+    digi.phU.textContent = swPh ? "km/h" : "km";
+    digi.phS.textContent = swPh ? `${fmt1(ph.km)} km · ${ldTxt}` : `${spdTxt} km/h · ${ldTxt}`;
   } else {
     digi.phK.textContent = "Bart / Gleiten";
     digi.ph.textContent = "---";
     digi.phU.textContent = "";
     digi.phS.textContent = "---";
   }
+
+  // Gleitzahl über Grund: letzte 30 s und Mittel über 2 min (beim Kreisen keine)
+  const fmtLd = (g) => (!g ? "---" : g.ld >= 200 ? "∞" : Math.round(g.ld));
+  const g30 = analyzer.glideRatio(30), g120 = analyzer.glideRatio(120);
+  const swLd = swapped("ld");
+  // am Handy „GZ“ statt „Gleitzahl“, sonst wird die Überschrift abgeschnitten
+  digi.ldK.innerHTML = `<span class="d-long">Gleitzahl</span><span class="d-short">GZ</span> ${swLd ? "2 min" : "30 s"}`;
+  digi.ld.textContent = fmtLd(swLd ? g120 : g30);
+  digi.ldS.textContent = analyzer.circling ? "Kreisen" : swLd ? `30 s ${fmtLd(g30)}` : `Ø 2 min ${fmtLd(g120)}`;
 
   // Weg geflogen (ganze Spur) und OLC (6 Schenkel)
   const fw = analyzer.flown();
