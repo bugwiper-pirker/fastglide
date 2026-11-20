@@ -266,6 +266,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   let target = null;            // letzte Position vom GPS / aus dem Flug
   let cur = null;               // geglättet für die Darstellung
   let bank = 0, prevTrack = null, prevTime = null;
+  let turns = [];                  // Kurs fortlaufend (ohne Sprung bei 360°) der letzten Sekunden
   // Ruhige Kamera beim Kreisen: Blick bleibt in der weiteren Flugrichtung, Mitte ist die Bartmitte
   let circling = false, holdBearing = null, ahead = null;
   let recent = [];                 // letzte Positionen (Zeit, Ort, Kurs)
@@ -389,7 +390,7 @@ export async function createMap3d({ container, followBtn, getImagery }) {
           .scale(new THREE.Vector3(unit * s, -unit * s, unit * s));
         // Lage des Flugzeugs: Kurs, Querneigung, Längsneigung (in Metern, x Osten, y Norden, z oben)
         glider.matrix.copy(new THREE.Matrix4().makeRotationZ(-rad(cur.track))
-          .multiply(new THREE.Matrix4().makeRotationY(rad(bank)))
+          .multiply(new THREE.Matrix4().makeRotationY(rad(roll)))
           .multiply(new THREE.Matrix4().makeRotationX(Math.atan2(cur.vario || 0, Math.max(10, cur.speed / 3.6)))));
         glider.matrixWorldNeedsUpdate = true;
         glider.visible = !cockpit;
@@ -528,8 +529,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = jump ? target[key] : cur[key] + ((target[key] ?? 0) - (cur[key] ?? 0)) * k;
     cur.track = jump ? target.track : (cur.track + angDiff(target.track, cur.track) * k + 360) % 360;
 
-    // Querlage weich nachführen (kommt nur einmal pro Sekunde)
-    roll += (bank - roll) * Math.min(1, dt * 3);
+    // Querlage weich nachführen (etwa 1 s), die Kamera im Cockpit noch etwas ruhiger
+    roll += (bank - roll) * Math.min(1, dt * (cockpit ? 0.9 : 1.5));
     if (cockpit) {
       // Auge etwa 1 m über dem GPS, Blick in Flugrichtung, Horizont kippt mit der Querlage
       const o = map.calculateCameraOptionsFromCameraLngLatAltRotation([cur.lon, cur.lat], cur.alt + 1,
@@ -563,11 +564,22 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       if (!p) return;
       const track = p.track ?? target?.track ?? 0;
       // Querneigung aus der Kurvenrate: tan(Neigung) = v · ω / g
-      if (prevTrack != null && p.time != null && prevTime != null && p.time > prevTime) {
-        const w = (angDiff(track, prevTrack) * Math.PI) / 180 / ((p.time - prevTime) / 1000);
-        const v = (p.speedKmh || 0) / 3.6;
-        const b = Math.max(-60, Math.min(60, (Math.atan((v * w) / 9.81) * 180) / Math.PI));
-        bank += (b - bank) * 0.5;
+      // Die Kurvenrate kommt aus den letzten 5 s (nicht von Punkt zu Punkt), sonst wackelt die
+      // Querlage mit jedem GPS-Rauschen. Kleine Werte (unter 5°) werden sanft gegen 0 gezogen,
+      // damit der Horizont im Geradeausflug ruhig bleibt.
+      if (p.time != null && prevTime != null && (p.time < prevTime || p.time - prevTime > 30000)) turns = [];
+      if (p.time != null && (prevTime == null || p.time > prevTime)) {
+        const last = turns.at(-1);
+        turns.push({ t: p.time, a: last ? last.a + angDiff(track, prevTrack ?? track) : track });
+        while (turns.length > 2 && turns[0].t < p.time - 5000) turns.shift();
+        const a = turns[0], z = turns.at(-1), sec = (z.t - a.t) / 1000;
+        if (sec >= 1.5) {
+          const w = ((z.a - a.a) * Math.PI) / 180 / sec;
+          const v = (p.speedKmh || 0) / 3.6;
+          let b = Math.max(-60, Math.min(60, (Math.atan((v * w) / 9.81) * 180) / Math.PI));
+          if (Math.abs(b) < 5) b = (b * Math.abs(b)) / 5;
+          bank = b;
+        }
       }
       prevTrack = track; prevTime = p.time;
       target = { lat: p.lat, lon: p.lon, alt: p.alt ?? 0, track, speed: p.speedKmh || 0, vario: p.vario || 0 };
