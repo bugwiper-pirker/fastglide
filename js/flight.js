@@ -298,6 +298,8 @@ export function createFlightAnalyzer() {
       if (t != null && s.prev) updateTrace(s.prev);
     },
     get circling() { return s.circling; },
+    // Kurvenrate (°/s, über ca. 3 s geglättet), für schnelles Umschalten des Tons
+    get turnRate() { return s.rate; },
     get wind() {
       const w = s.wind;
       if (!w || !s.prev || s.prev.t - w.t > WIND_STALE_MIN * 60000) return null;

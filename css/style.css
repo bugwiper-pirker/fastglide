@@ -51,6 +51,9 @@ button {
   border: 1px solid transparent; border-radius: 8px; min-width: 40px; min-height: 40px; padding: 6px 10px; cursor: pointer;
 }
 button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+/* Lautsprecher-Taste: kleine Angabe der Tonart (V = nur Vario, SF = Sollfahrt/Vario automatisch) */
+#sound { white-space: nowrap; }
+#sound .snd-tag { font-size: .62em; font-weight: 700; margin-left: 2px; vertical-align: middle; color: var(--accent); }
 button.pending { border-style: dashed; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { button.pending { animation: none; } .fg-arrow { transition: none; } }

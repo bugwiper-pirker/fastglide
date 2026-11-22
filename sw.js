@@ -1,6 +1,6 @@
 // Offline-Cache. Bei jeder Änderung an der App VERSION erhöhen,
 // damit die Handys die neue Version laden.
-const VERSION = "fastglide-v39";
+const VERSION = "fastglide-v41";
 const FILES = [
   "./",
   "index.html",

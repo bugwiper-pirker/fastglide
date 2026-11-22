@@ -299,6 +299,7 @@ function clockText(ms) {
 const windText = (w) => w ? `${String(Math.round(w.from / 10) * 10 % 360).padStart(3, "0")}°/${Math.round(w.speed * 3.6)}` : null;
 
 // Sollfahrt, Schnitt und Wind aus der Flugauswertung
+let varioToneUntil = 0;
 function updatePerf(d) {
   const air = analyzer.airspeed, wind = analyzer.wind;
   const ias = air.fromWind ? air.ias : null;
@@ -310,7 +311,15 @@ function updatePerf(d) {
   asiInst.inst.setLabel(air.logger ? "IAS Logger" : ias != null ? "IAS ber." : "GS");
   asiInst.inst.setBug(d.speedKmh == null ? null : stf);
   const flying = d.speedKmh != null && d.speedKmh > 40;
-  audio.setStf(settings.stfTone && flying && !perf.circling && speed != null ? speed - stf : null);
+  // Automatisch zwischen Sollfahrt- und Vario-Ton umschalten (wie LX „Auto“): sofort Vario-Ton
+  // beim Eindrehen (nicht erst nach der Kreiserkennung von 15 s) und bei kräftigem Steigen im
+  // Geradeausflug, damit Ton und Nadel beim Zentrieren übereinstimmen. Danach noch 8 s halten,
+  // damit der Ton nicht hin- und herspringt.
+  const t = d.time ?? Date.now(), climbNow = varioInst.target ?? 0;
+  if (analyzer.circling || Math.abs(analyzer.turnRate) > 6 || climbNow >= Math.max(1, settings.mc)) varioToneUntil = t + 8000;
+  if (t < varioToneUntil - 60000) varioToneUntil = 0; // nach Sprung zurück in der Zeitachse
+  const stfMode = settings.stfTone && flying && speed != null && t >= varioToneUntil;
+  audio.setStf(stfMode ? speed - stf : null);
 }
 
 // Windpfeil: zeigt, wohin der Wind weht (Karte nordausgerichtet), immer auf dem kürzeren Weg drehen
@@ -670,10 +679,19 @@ function applyAudioSettings() {
   audio.setVolume(settings.volume / 100);
   audio.setSinkTone(settings.sinkTone, settings.sinkThreshold);
 }
+// Lautsprecher-Taste schaltet reihum: aus → nur Vario → Sollfahrt/Vario automatisch → aus
+const SOUND_MODES = {
+  off: { icon: "🔇", tag: "", title: "Vario-Ton aus" },
+  vario: { icon: "🔊", tag: "V", title: "Nur Vario-Ton" },
+  auto: { icon: "🔊", tag: "SF", title: "Sollfahrt im Geradeausflug, Vario beim Kreisen und Steigen" },
+};
+const soundMode = () => (!settings.sound ? "off" : settings.stfTone ? "auto" : "vario");
 function updateSoundBtn() {
-  const running = audio.isRunning();
+  const running = audio.isRunning(), m = SOUND_MODES[soundMode()];
   soundBtn.setAttribute("aria-pressed", settings.sound);
-  soundBtn.textContent = settings.sound ? "🔊" : "🔇";
+  soundBtn.innerHTML = m.icon + (m.tag ? `<small class="snd-tag">${m.tag}</small>` : "");
+  soundBtn.title = m.title;
+  soundBtn.setAttribute("aria-label", m.title);
   soundBtn.classList.toggle("pending", settings.sound && !running);
 }
 async function startSound() {
@@ -686,14 +704,20 @@ async function startSound() {
   updateSoundBtn();
 }
 soundBtn.addEventListener("click", async () => {
-  settings.sound = !settings.sound;
+  const next = { off: "vario", vario: "auto", auto: "off" }[soundMode()];
+  settings.sound = next !== "off";
+  if (next !== "off") settings.stfTone = next === "auto";
+  stfToneIn.checked = settings.stfTone;
   saveSettings();
+  if (last) updatePerf(last);
   if (settings.sound) {
     await startSound();
-    if (audio.isRunning()) showToast("Vario-Ton ein. Lautstärke über die Medien-Lautstärke des Handys.");
+    if (audio.isRunning()) showToast(next === "vario" ? "Ton: nur Vario. Lautstärke über die Medien-Lautstärke des Handys."
+      : "Ton: Sollfahrt im Geradeausflug, Vario beim Kreisen und Steigen.");
   } else {
     audio.disable();
     updateSoundBtn();
+    showToast("Ton aus.");
   }
 });
 // Endanflug-Box: Tippen öffnet die Zielauswahl
@@ -996,7 +1020,7 @@ igcAirIn.addEventListener("change", () => {
   if (last) updatePerf(last);
   renderPerf();
 });
-stfToneIn.addEventListener("change", () => { settings.stfTone = stfToneIn.checked; saveSettings(); if (last) updatePerf(last); });
+stfToneIn.addEventListener("change", () => { settings.stfTone = stfToneIn.checked; saveSettings(); updateSoundBtn(); if (last) updatePerf(last); });
 
 // ---------- Schnitt: Details und Start von Hand ----------
 const avgDlg = document.getElementById("avg-dlg");

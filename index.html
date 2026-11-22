@@ -251,6 +251,7 @@
         <p class="hint">Fahrtmesser: Beim Arcus M die Markierungen aus dem Flughandbuch. Bei anderen Typen nur ein gelber Strich bei v<sub>NO</sub> (Ende des grünen Bogens), soweit bekannt. Bitte den eigenen Fahrtmesser beachten.</p>
         <button type="button" id="open-stf">MC, Flächenbelastung, Mücken …</button>
         <label class="row"><input id="stf-tone" type="checkbox"> Sollfahrtton im Geradeausflug</label>
+        <p class="hint">Beim Eindrehen und bei kräftigem Steigen (ab MC, mindestens 1 m/s) schaltet der Ton sofort auf Vario, 8 s nach dem Ausrollen wieder auf Sollfahrt.</p>
         <p class="hint">Das Handy misst keine Fahrt durch die Luft. Der Wind wird beim Kreisen (auch bei Wenden am Hang über ⅔ Kreis) aus dem Versatz geschätzt.
           Daraus folgen Fahrt durch die Luft (IAS, berechnet), Netto-Steigen und die Sollfahrt zum Delfinfliegen.
           Ohne Windschätzung (oder älter als 20 min) gilt die Sollfahrt für ruhige Luft, verglichen wird dann mit der Fahrt über Grund.
@@ -332,7 +333,7 @@
 
       <fieldset>
         <legend>Vario-Ton</legend>
-        <p class="hint">Mit 🔊 oben ein- und ausschalten. Ab +0,2 m/s piept es, je stärker das Steigen, desto höher und schneller.</p>
+        <p class="hint">Mit 🔊 oben umschalten: aus → V (nur Vario) → SF (Sollfahrt im Geradeausflug, Vario beim Kreisen und Steigen) → aus. Ab +0,2 m/s piept es, je stärker das Steigen, desto höher und schneller.</p>
         <label>Lautstärke
           <input id="volume" type="range" min="10" max="100" step="5">
         </label>
