@@ -13,7 +13,7 @@ const STF_MAX = 40;        // km/h Abweichung, ab hier ändert sich der Ton nich
 // jede m/s etwa ein Ganzton bis eine kleine Terz höher, 6 m/s ≈ 1500 Hz
 const F0 = 520, F_MAX = 1500;
 const SINK_F0 = 400, SINK_MIN = 190; // Sinkton fällt ebenso logarithmisch
-const TAU = 0.9;           // s, zusätzliche Mittelung des Werts für den Ton
+const TAU = 0.2;           // s, nur leicht geglättet: der Ton folgt der Nadel, Ruhe kommt von der Vario-Mittelung
 
 export function createVarioAudio() {
   let ctx = null, osc = null, gain = null, timer = null;
@@ -69,7 +69,7 @@ export function createVarioAudio() {
     if (v != null && v >= CLIMB_START) {
       const k = Math.min(v, MAX) / MAX;           // 0..1
       // Tonhöhe gleitet stufenlos, auch während eines Pieps
-      osc.frequency.setTargetAtTime(logScale(k, F0, F_MAX), now, 0.12);
+      osc.frequency.setTargetAtTime(logScale(k, F0, F_MAX), now, 0.06);
       // Pieptakt: schwach langsam und kurz, stark schnell und länger (etwa 1,6 … 7 pro Sekunde)
       const period = logScale(k, 0.62, 0.15);
       const duty = 0.45 + k * 0.2;

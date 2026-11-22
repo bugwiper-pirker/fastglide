@@ -504,7 +504,8 @@ function frame() {
     i.shown = i.shown == null ? i.target : i.shown + (i.target - i.shown) * 0.15;
     i.inst.update(i.shown, i.extraVal);
   }
-  audio.setValue(stale ? null : varioInst.target);
+  // Ton folgt genau dem, was die Nadel zeigt
+  audio.setValue(stale ? null : varioInst.shown);
   if (stale) audio.setStf(null);
   updateDigital(); // auch auf der Instrumentenseite (Seitenspalten auf breiten Bildschirmen)
   if (frameCount++ % 10 === 0) renderPerf();
