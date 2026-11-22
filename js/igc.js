@@ -133,5 +133,11 @@ export function fixAt(flight, t) {
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (f[mid].t <= t) lo = mid; else hi = mid; }
   const a = f[lo], b = f[hi], k = (t - a.t) / (b.t - a.t || 1);
   const lerp = (x, y) => x + (y - x) * k;
-  return { t, lat: lerp(a.lat, b.lat), lon: lerp(a.lon, b.lon), alt: lerp(a.alt, b.alt), speedKmh: lerp(a.speedKmh, b.speedKmh), track: a.track, i: lo };
+  // Kurs auf dem kürzeren Weg (über 360° hinweg) dazwischen, sonst springt die Blickrichtung je Punkt
+  let track = a.track;
+  if (a.track != null && b.track != null) {
+    const d = ((b.track - a.track) % 360 + 540) % 360 - 180;
+    track = (a.track + d * k + 360) % 360;
+  }
+  return { t, lat: lerp(a.lat, b.lat), lon: lerp(a.lon, b.lon), alt: lerp(a.alt, b.alt), speedKmh: lerp(a.speedKmh, b.speedKmh), track, i: lo };
 }

@@ -265,6 +265,8 @@ export async function createMap3d({ container, followBtn, getImagery }) {
   // ---- Zustand ----
   let target = null;            // letzte Position vom GPS / aus dem Flug
   let cur = null;               // geglättet für die Darstellung
+  let samples = [];             // gemeldete Positionen mit Ankunftszeit (performance.now)
+  let interval = 1000;          // mittlerer Abstand der Meldungen in ms
   let bank = 0, prevTrack = null, prevTime = null;
   let turns = [];                  // Kurs fortlaufend (ohne Sprung bei 360°) der letzten Sekunden
   // Ruhige Kamera beim Kreisen: Blick bleibt in der weiteren Flugrichtung, Mitte ist die Bartmitte
@@ -522,12 +524,19 @@ export async function createMap3d({ container, followBtn, getImagery }) {
     const dt = Math.min(0.2, (now - last) / 1000);
     last = now;
     if (!target) return;
-    if (!cur) cur = { ...target };
-    const k = Math.min(1, dt * 5);
-    // große Sprünge (Zeitachse) nicht animieren
-    const jump = Math.abs(target.lat - cur.lat) + Math.abs(target.lon - cur.lon) > 0.05;
-    for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = jump ? target[key] : cur[key] + ((target[key] ?? 0) - (cur[key] ?? 0)) * k;
-    cur.track = jump ? target.track : (cur.track + angDiff(target.track, cur.track) * k + 360) % 360;
+    // Gleichmäßig zwischen den gemeldeten Positionen laufen (um etwa einen Meldeabstand verzögert),
+    // statt jedem neuen Wert schnell nachzulaufen und dann stehenzubleiben
+    const rt = now - interval * 1.15;
+    let j = samples.length - 1;
+    while (j > 0 && samples[j - 1].w > rt) j--;
+    const b = samples[j], a = samples[j - 1] || b;
+    const k = b === a ? 1 : clamp((rt - a.w) / (b.w - a.w), 0, 1);
+    const jump = !cur;
+    if (!cur) cur = {};
+    for (const key of ["lat", "lon", "alt", "speed", "vario"]) cur[key] = a[key] + (b[key] - a[key]) * k;
+    const tr = (a.track + angDiff(b.track, a.track) * k + 360) % 360;
+    // Kurs noch leicht geglättet, damit die Ecken zwischen den Punkten nicht ruckeln
+    cur.track = jump || cur.track == null ? tr : (cur.track + angDiff(tr, cur.track) * Math.min(1, dt * 4) + 360) % 360;
 
     // Querlage weich nachführen (etwa 1 s), die Kamera im Cockpit noch etwas ruhiger
     roll += (bank - roll) * Math.min(1, dt * (cockpit ? 0.9 : 1.5));
@@ -583,6 +592,13 @@ export async function createMap3d({ container, followBtn, getImagery }) {
       }
       prevTrack = track; prevTime = p.time;
       target = { lat: p.lat, lon: p.lon, alt: p.alt ?? 0, track, speed: p.speedKmh || 0, vario: p.vario || 0 };
+      // Puffer für die gleichmäßige Darstellung; große Sprünge (Zeitachse) nicht animieren
+      const w = performance.now(), prev = samples.at(-1);
+      const far = prev && Math.abs(prev.lat - p.lat) + Math.abs(prev.lon - p.lon) > 0.05;
+      if (far || (prev && w - prev.w > 5000)) { samples = []; cur = null; }
+      if (prev && !far && w > prev.w) interval += (clamp(w - prev.w, 50, 2000) - interval) * 0.3;
+      samples.push({ w, ...target });
+      while (samples.length > 2 && samples[1].w < w - 4000) samples.shift();
 
       // Verlauf für Bartmitte und Kurs vor dem Kreisen; nach einem Sprung neu
       const t = p.time ?? Date.now();
